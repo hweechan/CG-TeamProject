@@ -127,4 +127,23 @@ export class FPSController {
     const euler = new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ');
     this.camera.quaternion.setFromEuler(euler);
   }
+
+  teleport(x, y, z) {
+    this.body.setNextKinematicTranslation({ x, y, z });
+    this.verticalVelocity = 0;
+    this.yaw = 0;
+    this.pitch = 0;
+    const camOffset = PLAYER_HEIGHT / 2 - 0.15;
+    this.camera.position.set(x, y + camOffset, z);
+    this.camera.quaternion.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ'));
+  }
+
+  offsetTeleport(dx, dy, dz) {
+    const camOffset = PLAYER_HEIGHT / 2 - 0.15;
+    const newX = this.camera.position.x + dx;
+    const newY = this.camera.position.y + dy;
+    const newZ = this.camera.position.z + dz;
+    this.body.setNextKinematicTranslation({ x: newX, y: newY - camOffset, z: newZ });
+    this.camera.position.set(newX, newY, newZ);
+  }
 }

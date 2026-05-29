@@ -20,15 +20,20 @@ export function createScene(physicsWorld, RAPIER) {
   dirLight.shadow.camera.far = 200;
   scene.add(dirLight);
 
-  buildStage1(scene, physicsWorld, RAPIER);
+  const photoItemMesh = buildStage1(scene, physicsWorld, RAPIER);
   buildStage2(scene, physicsWorld, RAPIER);
 
-  return { scene };
+  const portal1Pos = new THREE.Vector3(20, 0, -14.5);
+  const portal2Pos = new THREE.Vector3(100, 0, 19);
+  buildPortalFrame(scene, physicsWorld, RAPIER, portal1Pos);
+  buildPortalFrame(scene, physicsWorld, RAPIER, portal2Pos);
+
+  return { scene, portal1Pos, portal2Pos, photoItemMesh };
 }
 
-function addBox(scene, physicsWorld, RAPIER, { size, position, color = 0x888888 }) {
+function addBox(scene, physicsWorld, RAPIER, { size, position, color = 0x888888, roughness = 0.7, metalness = 0.1 }) {
   const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.7, metalness: 0.1 });
+  const mat = new THREE.MeshStandardMaterial({ color, roughness, metalness });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(position[0], position[1], position[2]);
   mesh.castShadow = true;
@@ -44,66 +49,91 @@ function addBox(scene, physicsWorld, RAPIER, { size, position, color = 0x888888 
   return mesh;
 }
 
+function buildPortalFrame(scene, physicsWorld, RAPIER, position) {
+  const OPENING_W = 3;
+  const OPENING_H = 3.5;
+  const T = 0.4;
+  const frameStyle = { color: 0x444444, roughness: 0.3, metalness: 0.8 };
+
+  addBox(scene, physicsWorld, RAPIER, {
+    size: [T, OPENING_H, T],
+    position: [position.x - OPENING_W / 2 - T / 2, position.y + OPENING_H / 2, position.z],
+    ...frameStyle,
+  });
+
+  addBox(scene, physicsWorld, RAPIER, {
+    size: [T, OPENING_H, T],
+    position: [position.x + OPENING_W / 2 + T / 2, position.y + OPENING_H / 2, position.z],
+    ...frameStyle,
+  });
+
+  addBox(scene, physicsWorld, RAPIER, {
+    size: [OPENING_W + T * 2, T, T],
+    position: [position.x, position.y + OPENING_H + T / 2, position.z],
+    ...frameStyle,
+  });
+
+  const portalGeo = new THREE.PlaneGeometry(OPENING_W, OPENING_H);
+  const portalMat = new THREE.MeshBasicMaterial({
+    color: 0x4488ff,
+    transparent: true,
+    opacity: 0.3,
+    side: THREE.DoubleSide,
+  });
+  const portalMesh = new THREE.Mesh(portalGeo, portalMat);
+  portalMesh.position.set(position.x, position.y + OPENING_H / 2, position.z);
+  scene.add(portalMesh);
+}
+
 function buildStage1(scene, physicsWorld, RAPIER) {
-  // 왼쪽 복도 (키 7, 4, 1) — L자의 세로 부분
   addBox(scene, physicsWorld, RAPIER, {
     size: [10, 1, 30],
     position: [0, -0.5, 0],
     color: 0x999999,
   });
 
-  // 아래쪽 복도 (키 2, 3) — L자의 가로 부분
   addBox(scene, physicsWorld, RAPIER, {
     size: [20, 1, 10],
     position: [15, -0.5, 10],
     color: 0x999999,
   });
 
-  // 끝 플랫폼 (키 9) — 캐즘 건너편
+  // Chasm gap: x 5→15, z -15→-5 (no floor — bridge photo required)
+
   addBox(scene, physicsWorld, RAPIER, {
     size: [10, 1, 10],
     position: [20, -0.5, -10],
     color: 0x999999,
   });
 
-  // 사진 아이템 더미 (키 3)
-  addBox(scene, physicsWorld, RAPIER, {
+  const photoItemMesh = addBox(scene, physicsWorld, RAPIER, {
     size: [1, 1, 0.1],
     position: [20, 1, 10],
     color: 0xffcc00,
   });
 
-  // PC 모니터 더미 (키 9)
-  addBox(scene, physicsWorld, RAPIER, {
-    size: [2, 1.5, 0.5],
-    position: [20, 1, -10],
-    color: 0x3366ff,
-  });
+  return photoItemMesh;
 }
 
 function buildStage2(scene, physicsWorld, RAPIER) {
-  // 방 바닥
   addBox(scene, physicsWorld, RAPIER, {
     size: [40, 1, 40],
     position: [100, -0.5, 0],
     color: 0xaaaaaa,
   });
 
-  // 거대한 벽 (통로 차단)
   addBox(scene, physicsWorld, RAPIER, {
     size: [40, 20, 2],
     position: [100, 10, -10],
     color: 0x776655,
   });
 
-  // 높은 출구 플랫폼
   addBox(scene, physicsWorld, RAPIER, {
     size: [10, 1, 10],
     position: [100, 15, -25],
     color: 0x999999,
   });
 
-  // 최종 출구 문
   addBox(scene, physicsWorld, RAPIER, {
     size: [3, 4, 0.5],
     position: [100, 17, -29],
