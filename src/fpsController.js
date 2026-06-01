@@ -23,6 +23,8 @@ export class FPSController {
     this.keys = {};
 
     this.spawnPos = { x: 0, y: 2, z: 10 };
+    this.fallLimitY = -10; // Dynamic fall limit for level resets
+    this.onReset = null; // 리셋 콜백
 
     const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased()
       .setTranslation(this.spawnPos.x, this.spawnPos.y, this.spawnPos.z);
@@ -57,11 +59,13 @@ export class FPSController {
     if (!this.enabled) return;
 
     const pos = this.body.translation();
-    if (pos.y < -10) {
-      this.body.setNextKinematicTranslation(this.spawnPos);
-      this.verticalVelocity = 0;
-      const camOffset = PLAYER_HEIGHT / 2 - 0.15;
-      this.camera.position.set(this.spawnPos.x, this.spawnPos.y + camOffset, this.spawnPos.z);
+    // 화면 밖(아래)으로 떨어지면 리셋
+    if (pos.y < this.fallLimitY) {
+      if (this.onReset) {
+        this.onReset();
+      } else {
+        this.teleport(this.spawnPos.x, this.spawnPos.y, this.spawnPos.z);
+      }
       return;
     }
 
@@ -129,21 +133,15 @@ export class FPSController {
   }
 
   teleport(x, y, z) {
+    // 순간이동 직후에도 physics translation이 즉시 반영되도록 함
     this.body.setNextKinematicTranslation({ x, y, z });
+    // Rapier 특성상 한 프레임 뒤에 적용되는 문제를 막기 위해 translation도 수동 업데이트
+    this.body.setTranslation({ x, y, z }, true); 
     this.verticalVelocity = 0;
     this.yaw = 0;
     this.pitch = 0;
     const camOffset = PLAYER_HEIGHT / 2 - 0.15;
     this.camera.position.set(x, y + camOffset, z);
     this.camera.quaternion.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ'));
-  }
-
-  offsetTeleport(dx, dy, dz) {
-    const camOffset = PLAYER_HEIGHT / 2 - 0.15;
-    const newX = this.camera.position.x + dx;
-    const newY = this.camera.position.y + dy;
-    const newZ = this.camera.position.z + dz;
-    this.body.setNextKinematicTranslation({ x: newX, y: newY - camOffset, z: newZ });
-    this.camera.position.set(newX, newY, newZ);
   }
 }
