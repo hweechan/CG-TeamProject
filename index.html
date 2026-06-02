@@ -4,76 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Web Viewfinder</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-    canvas { display: block; }
-    #crosshair {
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 20px; height: 20px;
-      pointer-events: none;
-      z-index: 10;
-    }
-    #crosshair::before, #crosshair::after {
-      content: '';
-      position: absolute;
-      background: rgba(255, 255, 255, 0.7);
-    }
-    #crosshair::before {
-      width: 2px; height: 20px;
-      left: 9px; top: 0;
-    }
-    #crosshair::after {
-      width: 20px; height: 2px;
-      top: 9px; left: 0;
-    }
-    #overlay {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0, 0, 0, 0.6);
-      z-index: 20;
-      cursor: pointer;
-    }
-    #overlay span {
-      color: #fff;
-      font-family: monospace;
-      font-size: 24px;
-    }
-    #interact-prompt {
-      display: none;
-      position: fixed;
-      bottom: 30%;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #fff;
-      font-family: monospace;
-      font-size: 20px;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 10px 20px;
-      border-radius: 5px;
-      z-index: 10;
-      pointer-events: none;
-    }
-  </style>
 </head>
 <body>
-  <div id="crosshair"></div>
-  <div id="overlay"><span>Click to Start</span></div>
-  <div id="interact-prompt"></div>
-  <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.159.0/build/three.module.js",
-            "three/addons/": "https://unpkg.com/three@0.159.0/examples/jsm/"
-        }
-    }
-    </script>
-  <script type="module" src="./src/main.js"></script>
+  <div id="root"></div>
+  <script type="module" src="./src2/main.tsx"></script>
 </body>
 </html>
