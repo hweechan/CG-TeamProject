@@ -22,6 +22,8 @@ export class FPSController {
     this.inputDir = new THREE.Vector3();
     this.keys = {};
 
+    this.isFlying = false;
+
     this.spawnPos = { x: 0, y: 2, z: 10 };
     this.fallLimitY = -10; // Dynamic fall limit for level resets
     this.onReset = null; // 리셋 콜백
@@ -37,7 +39,7 @@ export class FPSController {
     this.characterController.enableAutostep(0.3, 0.2, true);
     this.characterController.enableSnapToGround(0.3);
     this.characterController.setSlideEnabled(true);
-    this.characterController.setMaxSlopeClimbAngle(50 * (Math.PI / 180));
+    this.characterController.setMaxSlopeClimbAngle(85 * (Math.PI / 180));
 
     const camOffset = PLAYER_HEIGHT / 2 - 0.15;
     this.camera.position.set(this.spawnPos.x, this.spawnPos.y + camOffset, this.spawnPos.z);
@@ -83,33 +85,57 @@ export class FPSController {
 
     const forward = new THREE.Vector3(0, 0, -1);
     const right = new THREE.Vector3(1, 0, 0);
-    const yawQuat = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
-      this.yaw
-    );
-    forward.applyQuaternion(yawQuat);
-    right.applyQuaternion(yawQuat);
 
-    const moveDir = new THREE.Vector3();
-    moveDir.addScaledVector(right, this.inputDir.x);
-    moveDir.addScaledVector(forward, this.inputDir.z);
+    if (this.isFlying) {
+      // 비행 모드: 카메라가 바라보는 방향(Pitch 포함)으로 자유롭게 3D 이동
+      const yawPitchQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+      forward.applyQuaternion(yawPitchQuat);
+      right.applyQuaternion(yawPitchQuat);
 
-    if (grounded) {
-      if (this.verticalVelocity < 0) this.verticalVelocity = 0;
-      if (this.keys['Space']) {
-        this.verticalVelocity = JUMP_VELOCITY;
-      }
+      const moveDir = new THREE.Vector3();
+      moveDir.addScaledVector(right, this.inputDir.x);
+      moveDir.addScaledVector(forward, this.inputDir.z);
+
+      this.verticalVelocity = 0; // 중력 무시
+
+      const flySpeed = MOVE_SPEED * 2.5; // 비행 시 약간 더 빠른 속도
+      const desiredMovement = new this.RAPIER.Vector3(
+        moveDir.x * flySpeed * delta,
+        moveDir.y * flySpeed * delta,
+        moveDir.z * flySpeed * delta
+      );
+
+      this.characterController.computeColliderMovement(this.collider, desiredMovement);
     } else {
-      this.verticalVelocity -= GRAVITY * delta;
+      // 일반 모드: 바닥(XZ 평면) 이동 및 중력 적용
+      const yawQuat = new THREE.Quaternion().setFromAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        this.yaw
+      );
+      forward.applyQuaternion(yawQuat);
+      right.applyQuaternion(yawQuat);
+
+      const moveDir = new THREE.Vector3();
+      moveDir.addScaledVector(right, this.inputDir.x);
+      moveDir.addScaledVector(forward, this.inputDir.z);
+
+      if (grounded) {
+        if (this.verticalVelocity < 0) this.verticalVelocity = 0;
+        if (this.keys['Space']) {
+          this.verticalVelocity = JUMP_VELOCITY;
+        }
+      } else {
+        this.verticalVelocity -= GRAVITY * delta;
+      }
+
+      const desiredMovement = new this.RAPIER.Vector3(
+        moveDir.x * MOVE_SPEED * delta,
+        this.verticalVelocity * delta,
+        moveDir.z * MOVE_SPEED * delta
+      );
+
+      this.characterController.computeColliderMovement(this.collider, desiredMovement);
     }
-
-    const desiredMovement = new this.RAPIER.Vector3(
-      moveDir.x * MOVE_SPEED * delta,
-      this.verticalVelocity * delta,
-      moveDir.z * MOVE_SPEED * delta
-    );
-
-    this.characterController.computeColliderMovement(this.collider, desiredMovement);
 
     const corrected = this.characterController.computedMovement();
     const curPos = this.body.translation();

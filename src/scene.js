@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { loadStage1 } from './stage1.js';
 import { loadStage2 } from './stage2.js';
+import { loadStage3 } from './stage3.js';
 
 export function createScene() {
   const scene = new THREE.Scene();
@@ -35,6 +36,41 @@ export function loadStage(stageIndex, scene, physicsWorld, RAPIER, environmentOb
     return loadStage1(scene, physicsWorld, RAPIER, environmentObjects);
   } else if (stageIndex === 2) {
     return loadStage2(scene, physicsWorld, RAPIER, environmentObjects);
+  } else if (stageIndex === 3) {
+    return loadStage3(scene, physicsWorld, RAPIER, environmentObjects);
+  } else if (stageIndex >= 4 && stageIndex <= 5) {
+    // Dummy stages for Developer Mode testing
+    const offsetY = -100 * stageIndex;
+    
+    // Simple 50x50 flat floor
+    const geo = new THREE.BoxGeometry(50, 1, 50);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x223344, roughness: 0.8 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, -0.5 + offsetY, 0);
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    environmentObjects.push(mesh);
+
+    const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(0, -0.5 + offsetY, 0);
+    const body = physicsWorld.createRigidBody(bodyDesc);
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(25, 0.5, 25);
+    physicsWorld.createCollider(colliderDesc, body);
+
+    // Dummy photo item (hidden underground)
+    const photoItemMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 0.1, 0.1),
+      new THREE.MeshBasicMaterial({ color: 0x000000 })
+    );
+    photoItemMesh.position.set(0, -10 + offsetY, 0);
+    photoItemMesh.visible = false;
+    scene.add(photoItemMesh);
+    environmentObjects.push(photoItemMesh);
+
+    return {
+      startPos: new THREE.Vector3(0, 2 + offsetY, 0),
+      portal1Pos: new THREE.Vector3(20, 2 + offsetY, 0), // Dummy portal position
+      photoItemMesh: photoItemMesh
+    };
   }
   return null;
 }

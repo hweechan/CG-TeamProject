@@ -4,9 +4,192 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Web Viewfinder</title>
+<<<<<<< HEAD
 </head>
 <body>
   <div id="root"></div>
   <script type="module" src="./src2/main.tsx"></script>
+=======
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
+    
+    @keyframes loading {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(200%); }
+    }
+    .animate-\\[loading_1s_infinite\\] { animation: loading 1s infinite linear; }
+
+    /* Crosshair Custom */
+    #crosshair {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px; height: 20px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.7);
+    }
+    #crosshair::before { width: 2px; height: 20px; left: 9px; top: 0; }
+    #crosshair::after { width: 20px; height: 2px; top: 9px; left: 0; }
+  </style>
+</head>
+<body>
+  <!-- Canvas attached by ThreeJS -->
+  <div id="crosshair"></div>
+  
+  <main class="absolute inset-0 pointer-events-none z-10 overflow-hidden text-slate-200 select-none">
+    <!-- HUD Header -->
+    <header class="absolute top-0 left-0 right-0 p-6 flex justify-between items-start pointer-events-none z-20" id="hud-header">
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <div class="w-10 h-10 bg-slate-950/80 backdrop-blur-sm border border-slate-800 rounded-lg flex items-center justify-center shadow-lg">
+            <i data-lucide="layers" class="w-5 h-5 text-emerald-400"></i>
+          </div>
+          <div class="flex flex-col">
+            <h1 class="text-sm font-bold font-mono tracking-wider text-white flex items-center gap-2">
+              VIEWFINDER PROTOTYPE
+              <span class="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[9px] rounded uppercase">Beta</span>
+            </h1>
+            <div class="text-[10px] font-mono text-slate-400 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span id="sys-status">SYSTEM STATE: NOMINAL</span>
+            </div>
+            <div class="text-[10px] font-mono text-cyan-400 mt-1 tracking-wider" id="player-coords">
+              POS: X: 0.00 | Y: 0.00 | Z: 0.00
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 pointer-events-auto">
+        <button id="btn-reset" class="p-2.5 bg-slate-950/80 border border-slate-800 rounded-lg text-slate-300 hover:text-white shadow-md flex items-center gap-2 text-xs font-mono">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">RESET [R]</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Controls HUD -->
+    <section class="absolute bottom-6 left-6 pointer-events-none z-20" id="controls-hud">
+      <div class="bg-slate-950/40 backdrop-blur-sm border border-slate-800/30 rounded-xl p-3 shadow-lg flex flex-col gap-1.5">
+        <div class="flex gap-4 text-[10px] font-mono text-slate-300">
+          <div class="flex items-center gap-1.5"><span class="text-emerald-400 font-bold bg-slate-900/50 px-1 rounded">WASD</span> 이동</div>
+          <div class="flex items-center gap-1.5"><span class="text-emerald-400 font-bold bg-slate-900/50 px-1 rounded">SPACE</span> 점프</div>
+        </div>
+        <div class="flex gap-4 text-[10px] font-mono text-slate-300 mt-1">
+          <div class="flex items-center gap-1.5"><span class="text-emerald-400 font-bold bg-slate-900/50 px-1 rounded">L-CLICK</span> 집기/놓기</div>
+          <div class="flex items-center gap-1.5"><span class="text-emerald-400 font-bold bg-slate-900/50 px-1 rounded">ESC</span> 제어 해제</div>
+        </div>
+        <div class="flex gap-4 text-[10px] font-mono text-slate-300 mt-1">
+          <div class="flex items-center gap-1.5"><span class="text-emerald-400 font-bold bg-slate-900/50 px-1 rounded">SCROLL</span> 마우스 휠로 물체 회전</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dev Mode Indicator -->
+    <div id="dev-mode-indicator" class="hidden absolute top-20 right-6 text-emerald-400 font-mono text-xs font-bold bg-slate-950/70 p-2 border border-emerald-400 rounded-md pointer-events-none z-[100]">
+      개발자모드
+    </div>
+
+    <!-- Start Screen -->
+    <section id="start-screen" class="absolute inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-40 p-6 pointer-events-auto">
+      <div class="max-w-xl w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl text-center space-y-6">
+        <div class="mx-auto w-16 h-16 bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-400/40 rounded-2xl flex items-center justify-center">
+          <i data-lucide="gamepad" class="w-8 h-8 text-emerald-400"></i>
+        </div>
+        <div class="space-y-2">
+          <h2 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Web Viewfinder</h2>
+          <p class="text-slate-400 text-sm">강제 원근법(Forced Perspective)을 활용한 3D 공간 퍼즐 데모</p>
+        </div>
+        <div class="bg-slate-950/60 p-4 border border-slate-800 rounded-xl text-left space-y-3.5 text-xs text-slate-300">
+          <h3 class="font-bold text-slate-400 font-mono tracking-wider text-center uppercase flex items-center justify-center gap-1.5">
+            <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i> HOW TO PLAY:
+          </h3>
+          <ul class="space-y-2 list-disc list-inside">
+            <li><strong class="text-white">이동 & 집기</strong>: WASD로 이동하고 물체를 바라본 후 좌클릭하여 픽업하세요.</li>
+            <li><strong class="text-emerald-400">강제 원근법</strong>: 물체를 들고 있는 상태에서는 원근법을 무시하고 거리감을 마음대로 조작할 수 있습니다!</li>
+            <li><strong class="text-white">스테이지 이동</strong>: 맵 끝의 포탈(모니터)에 가까이 다가가면 다음 스테이지로 넘어갑니다.</li>
+          </ul>
+        </div>
+        <button id="btn-start" class="w-full py-4 px-6 bg-gradient-to-r from-emerald-500 to-teal-500 font-semibold text-slate-950 rounded-xl shadow-lg hover:from-emerald-400 hover:to-teal-400 transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-wider">
+          시작하기 (Click to enter Viewport)
+          <i data-lucide="arrow-right" class="w-5 h-5"></i>
+        </button>
+      </div>
+    </section>
+
+    <!-- Pause Screen -->
+    <section id="pause-screen" class="hidden absolute inset-0 bg-slate-950/40 backdrop-blur-sm flex flex-col items-center justify-center z-30 pointer-events-auto">
+      <div class="bg-slate-900/90 border border-emerald-500/50 p-6 rounded-xl text-center shadow-2xl max-w-sm flex flex-col items-center gap-3">
+        <div class="w-10 h-10 bg-emerald-500/10 border border-emerald-400/30 rounded-full flex items-center justify-center animate-pulse">
+          <i data-lucide="compass" class="w-5 h-5 text-emerald-400"></i>
+        </div>
+        <div class="space-y-1">
+          <h3 class="text-sm font-bold text-white font-mono uppercase tracking-wider">CAMERA CONTROL PAUSED</h3>
+          <p class="text-slate-300 text-xs leading-relaxed">아래 버튼 또는 뷰포트를 클릭하여 제어를 다시 시작하세요.</p>
+        </div>
+        <button id="btn-resume" class="mt-2 w-full py-2.5 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 hover:bg-emerald-500/30 border border-emerald-500/50 rounded-lg text-emerald-300 font-mono text-xs font-bold transition-all shadow-md">
+          PLAY RESUME
+        </button>
+      </div>
+    </section>
+
+    <!-- Interact Prompt -->
+    <div id="interact-prompt" class="hidden absolute bottom-28 left-1/2 -translate-x-1/2 bg-slate-950/90 border border-emerald-400/50 px-4 py-2 rounded-xl text-center shadow-2xl z-20 pointer-events-none">
+      <div class="flex items-center justify-center gap-2.5 text-emerald-400 font-bold font-mono text-sm uppercase" id="interact-text">
+        Click to Pick Up
+      </div>
+    </div>
+
+    <!-- Transition Screen -->
+    <section id="transition-screen" class="hidden absolute inset-0 bg-black/40 pointer-events-none flex flex-col items-center justify-center z-[60] transition-opacity duration-300 opacity-0">
+      <div class="text-center space-y-3">
+        <i data-lucide="tv" class="w-16 h-16 mx-auto text-[#00ffcc] animate-pulse"></i>
+        <div class="text-xs font-mono text-[#00ffcc] tracking-[0.25em] animate-pulse">
+          DIVE PORTAL LINKING...
+        </div>
+        <div class="w-64 h-1 bg-slate-900 rounded mx-auto overflow-hidden">
+          <div class="h-full bg-[#00ffcc] w-2/3 animate-[loading_1s_infinite] rounded"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Clear Screen -->
+    <section id="clear-screen" class="hidden absolute inset-0 bg-slate-950/95 flex items-center justify-center z-50 p-6 pointer-events-auto">
+      <div class="max-w-md w-full bg-slate-900 border border-emerald-400/40 p-8 rounded-2xl shadow-xl text-center space-y-6">
+        <div class="mx-auto w-16 h-16 bg-emerald-500/20 border border-emerald-400 rounded-full flex items-center justify-center">
+          <i data-lucide="check-circle-2" class="w-10 h-10 text-emerald-400"></i>
+        </div>
+        <div class="space-y-2">
+          <h2 class="text-2xl font-bold tracking-tight text-white uppercase">Challenge Complete!</h2>
+          <p class="text-slate-400 text-xs">데모의 모든 스테이지를 통과하였습니다.</p>
+        </div>
+        <button id="btn-restart-demo" class="w-full py-3 bg-slate-800 border border-slate-700 text-slate-200 rounded-xl hover:bg-slate-700 transition-all text-xs font-mono flex items-center justify-center gap-1.5">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          REPLAY DEMO
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    lucide.createIcons();
+  </script>
+  <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.159.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.159.0/examples/jsm/"
+        }
+    }
+  </script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

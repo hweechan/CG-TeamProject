@@ -1,34 +1,61 @@
 import * as THREE from 'three';
 
 export function loadStage2(scene, physicsWorld, RAPIER, environmentObjects) {
-  // 스테이지 2는 독립된 다른 공간 (y = -100) 에 배치하여 물리적 간섭 방지
-  const offsetY = -100;
-  
-  // 골 플랫폼 상단 (Y = 11.5) 지면이 도착지점
-  const portal1Pos = new THREE.Vector3(42, 11.5 + offsetY, 0); 
-  const startPos = new THREE.Vector3(0, 2 + offsetY, 0);
+  // 모니터 위치 (터널 안쪽 끝) - 통로 높이 2 상향 조정 (Y=8 -> 10)
+  const monitorBasePos = new THREE.Vector3(0, 10.0, 59.4); 
+  const portal1Pos = new THREE.Vector3(monitorBasePos.x, monitorBasePos.y + 1.8, monitorBasePos.z); // 스크린 중심부
+  const startPos = new THREE.Vector3(0, 2, 10); 
 
-  buildStage2Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY);
-  buildPortalFrame(scene, physicsWorld, RAPIER, portal1Pos, environmentObjects);
+  const photoItemMesh = buildStage2Map(scene, physicsWorld, RAPIER, environmentObjects);
+  buildMonitorConsole(scene, physicsWorld, RAPIER, monitorBasePos, environmentObjects);
 
-  // 실내 테마 포인트 조명들 추가 (아늑한 미래지향적 테스트실 분위기)
-  addStage2CeilingLights(scene, environmentObjects, offsetY);
-
-  // 스테이지 2 노란색 사진 아이템 (중간 하이 플랫폼 위에 배치)
-  const photoItemMesh = addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [1.2, 0.8, 0.1],
-    position: [22, 7.5 + offsetY + 0.6, 0],
-    color: 0xffcc00, 
-    metalness: 0.5
-  });
+  addCeilingLights(scene, environmentObjects);
 
   return { startPos, portal1Pos, photoItemMesh };
 }
 
-function addBox(scene, physicsWorld, RAPIER, environmentObjects, { size, position, color = 0x888888, roughness = 0.7, metalness = 0.1 }) {
+function addBox(scene, physicsWorld, RAPIER, environmentObjects, { size, position, color = 0x888888, roughness = 0.7, metalness = 0.1, type }) {
+  let materials;
+  if (type === 'prop' || type === 'accent') {
+    materials = new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  } else {
+    if (!type) {
+      type = (size[1] <= 1.5) ? 'floor' : 'wall';
+    }
+    const matFloor = new THREE.MeshStandardMaterial({ color: 0x4b5320, roughness: 0.9, metalness: 0.1 });
+    const matCeil = new THREE.MeshStandardMaterial({ color: 0xffdab9, roughness: 0.9, metalness: 0.1 });
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = 4;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffdab9'; // 살구색 베이스
+    ctx.fillRect(0, 0, 4, 256);
+    
+    // 벽 하단부 초록색 띠
+    const baseRatio = Math.min(1.0, 4 / size[1]);
+    const basePixels = Math.floor(256 * baseRatio);
+    ctx.fillStyle = '#32cd32';
+    ctx.fillRect(0, 256 - basePixels, 4, basePixels);
+    
+    const wallTex = new THREE.CanvasTexture(canvas);
+    wallTex.magFilter = THREE.NearestFilter; 
+    wallTex.minFilter = THREE.NearestFilter;
+    wallTex.colorSpace = THREE.SRGBColorSpace;
+    
+    const matWallSide = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.8, metalness: 0.1 });
+    // 포인트 컬러 벽 (어두운 색상 등)
+    const matWallAccent = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.1 });
+
+    const sideMaterial = (type === 'wall_accent') ? matWallAccent : matWallSide;
+
+    if (type === 'floor') materials = matFloor;
+    else if (type === 'ceiling') materials = matCeil;
+    else materials = [sideMaterial, sideMaterial, matFloor, matCeil, sideMaterial, sideMaterial];
+  }
+
   const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness, metalness });
-  const mesh = new THREE.Mesh(geo, mat);
+  const mesh = new THREE.Mesh(geo, materials);
   mesh.position.set(position[0], position[1], position[2]);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -40,188 +67,88 @@ function addBox(scene, physicsWorld, RAPIER, environmentObjects, { size, positio
   const body = physicsWorld.createRigidBody(bodyDesc);
   const colliderDesc = RAPIER.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2);
   physicsWorld.createCollider(colliderDesc, body);
+  
+  mesh.userData.rigidBody = body;
 
   return mesh;
 }
 
-function buildPortalFrame(scene, physicsWorld, RAPIER, position, environmentObjects) {
-  const OPENING_W = 3;
-  const OPENING_H = 3.5;
-  const T = 0.4;
-  const frameStyle = { color: 0xaa2222, roughness: 0.3, metalness: 0.8 }; // 스테이지2 골 포탈 색상 다르게
-
+function buildMonitorConsole(scene, physicsWorld, RAPIER, position, environmentObjects) {
   addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [T, OPENING_H, T],
-    position: [position.x - OPENING_W / 2 - T / 2, position.y + OPENING_H / 2, position.z], ...frameStyle
+    size: [1.6, 0.1, 1.2], position: [position.x, position.y + 0.05, position.z], color: 0x1f1f1f, type: 'prop'
   });
   addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [T, OPENING_H, T],
-    position: [position.x + OPENING_W / 2 + T / 2, position.y + OPENING_H / 2, position.z], ...frameStyle
+    size: [0.3, 1.0, 0.3], position: [position.x, position.y + 0.6, position.z], color: 0x3a3a3a, type: 'prop'
   });
   addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [OPENING_W + T * 2, T, T],
-    position: [position.x, position.y + OPENING_H + T / 2, position.z], ...frameStyle
+    size: [3.2, 2.0, 0.3], position: [position.x, position.y + 1.8, position.z], color: 0x2d2d2d, type: 'prop'
   });
 
-  const portalGeo = new THREE.PlaneGeometry(OPENING_W, OPENING_H);
-  const portalMat = new THREE.MeshBasicMaterial({ color: 0xff33aa, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
-  const portalMesh = new THREE.Mesh(portalGeo, portalMat);
-  portalMesh.position.set(position.x, position.y + OPENING_H / 2, position.z);
-  scene.add(portalMesh);
+  const screenGeo = new THREE.PlaneGeometry(3.0, 1.8);
+  const screenMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, side: THREE.DoubleSide });
+  const screenMesh = new THREE.Mesh(screenGeo, screenMat);
+  screenMesh.position.set(position.x, position.y + 1.8, position.z - 0.16); 
+  scene.add(screenMesh);
+  environmentObjects.push(screenMesh);
 }
 
-function addStage2CeilingLights(scene, environmentObjects, offsetY) {
-  const neonPink = 0xff00bb;
-  const warmYellow = 0xffaa00;
-
+function addCeilingLights(scene, environmentObjects) {
+  const lightColors = [0x00ffcc, 0xff33aa];
   const createHangingLight = (x, y, z, color) => {
-    // 1. 길게 내려오는 전선/케이블 에셋 (천장 Y=20 에서 8미터 하강해 Y=12 공중에 걸림)
-    const wireGeo = new THREE.BoxGeometry(0.04, 8, 0.04);
-    const wireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-    const wireMesh = new THREE.Mesh(wireGeo, wireMat);
-    wireMesh.position.set(x, y - 4 + offsetY, z); 
-    scene.add(wireMesh);
-    environmentObjects.push(wireMesh);
-
-    // 2. 조명 펜던트 바디
-    const fixtureGeo = new THREE.BoxGeometry(1.0, 0.4, 1.0);
-    const fixtureMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4, metalness: 0.8 });
-    const fixtureMesh = new THREE.Mesh(fixtureGeo, fixtureMat);
-    fixtureMesh.position.set(x, y - 8 + offsetY, z);
-    scene.add(fixtureMesh);
-    environmentObjects.push(fixtureMesh);
-
-    // 3. 실제 하강식 포인트 조명 (intensity 5.0, 범위 30)
-    const pLight = new THREE.PointLight(color, 5.0, 30);
-    pLight.decay = 1.0;
-    pLight.position.set(x, y - 9 + offsetY, z);
-    pLight.castShadow = true;
-    scene.add(pLight);
-    environmentObjects.push(pLight);
+    const pointLight = new THREE.PointLight(color, 4.5, 30);
+    pointLight.decay = 1.0;
+    pointLight.position.set(x, y - 5, z);
+    pointLight.castShadow = true;
+    scene.add(pointLight);
+    environmentObjects.push(pointLight);
   };
 
-  // 시작점과 장벽 사이 천장 조명
-  createHangingLight(5, 20, -5, warmYellow);
-  // 골 지점 천장 조명
-  createHangingLight(35, 20, 5, neonPink);
+  createHangingLight(0, 28, 0, lightColors[0]);
+  createHangingLight(0, 28, 30, lightColors[1]);
 }
 
-function buildStage2Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY) {
-  // 거대한 실내 챔버 공간 한계 정의 (Industrial Testing Hangar)
-  const hallLength = 70;
-  const hallWidth = 46;
-  const hallHeight = 36;
+function buildStage2Map(scene, physicsWorld, RAPIER, environmentObjects) {
+  // 방 전체 크기 (50x50, 높이 30)
+  const hallLength = 50; 
+  const hallWidth = 50;  
+  const hallHeight = 30; 
   
-  // 1. 심연의 실내 바닥 (구렁텅이 밑면 Y = -15.5)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [hallLength, 1, hallWidth], 
-    position: [21, -15.5 + offsetY, 0], 
-    color: 0x484c57, 
-    roughness: 0.8 
-  });
+  // 1. 기본 방 벽면 (바닥, 천장, 좌우, 앞)
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [hallLength, 1, hallWidth], position: [0, -0.5, 25], color: 0x3a3d46, type: 'floor' });
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [hallLength, 1, hallWidth], position: [0, 30.5, 25], color: 0x5e6370, type: 'ceiling' });
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [1, hallHeight, hallWidth], position: [-25.5, 15, 25], color: 0x767c8e, type: 'wall' });
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [1, hallHeight, hallWidth], position: [25.5, 15, 25], color: 0x767c8e, type: 'wall' });
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [hallLength, hallHeight, 1], position: [0, 15, -0.5], color: 0x767c8e, type: 'wall' });
+  
+  // 2. 뒤쪽 목표 벽면 (장애물 벽) - Z=50.5
+  // 플레이어가 통과해야 하는 구멍: X = -2.5 ~ 2.5, Y = 8 ~ 20 (폭 5로 축소)
+  const wallZ = 50.5;
+  
+  // 좌측 전체 벽 (X=-25 ~ -2.5, Y=0 ~ 30)
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [22.5, 30, 1], position: [-13.75, 15, wallZ], type: 'wall' });
+  // 우측 전체 벽 (X=2.5 ~ 25, Y=0 ~ 30)
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [22.5, 30, 1], position: [13.75, 15, wallZ], type: 'wall' });
+  // 중앙 하단 벽 (X=-2.5 ~ 2.5, Y=0 ~ 10)
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [5, 10, 1], position: [0, 5, wallZ], type: 'wall' });
+  // 중앙 윗벽 (X=-2.5 ~ 2.5, Y=16 ~ 30) - 공중이므로 초록띠 방지를 위해 ceiling 타입(살구색) 적용
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [5, 14, 1], position: [0, 23, wallZ], type: 'ceiling' });
 
-  // 2. 웅장한 실내 천장 (Y = 20.0)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [hallLength, 1, hallWidth], 
-    position: [21, 19.5 + offsetY, 0], 
-    color: 0x767c8e, 
-    roughness: 0.7 
-  });
+  // 3. 터널 내부 구조 (Y=10, Z=50.5 ~ 60.5)
+  // 터널 벽/바닥을 벽 정중앙(50.5)에서 시작하도록 하여 바깥쪽에서 Z-Fighting 방지
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [5, 1, 10], position: [0, 9.5, 55.5], type: 'floor' }); 
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [1, 6, 10], position: [-3, 13, 55.5], type: 'ceiling' }); 
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [1, 6, 10], position: [3, 13, 55.5], type: 'ceiling' }); 
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [5, 1, 10], position: [0, 16.5, 55.5], type: 'ceiling' }); 
+  addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [5, 6, 1], position: [0, 13, 60.5], type: 'ceiling' }); 
 
-  // 3. 외벽 (Z = ±23.0 - 시원하게 벌림)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [hallLength, hallHeight, 1], 
-    position: [21, 2 + offsetY, -23], 
-    color: 0x9ba2b5, 
-    roughness: 0.6 
-  });
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [hallLength, hallHeight, 1], 
-    position: [21, 2 + offsetY, 23], 
-    color: 0x9ba2b5, 
-    roughness: 0.6 
-  });
+  // 터널 내부 집중 조명 (입구가 아주 잘 보이게)
+  const tunnelLight = new THREE.PointLight(0xffa500, 3, 20); // 주황빛
+  tunnelLight.position.set(0, 16, 55);
+  scene.add(tunnelLight);
+  environmentObjects.push(tunnelLight);
 
-  // 4. 시작 뒷벽 (X = -20.0) 및 골 뒷벽 (X = 50.0)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [1, hallHeight, hallWidth], 
-    position: [-20, 2 + offsetY, 0], 
-    color: 0x767c8e, 
-    roughness: 0.7 
-  });
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [1, hallHeight, hallWidth], 
-    position: [50, 2 + offsetY, 0], 
-    color: 0x767c8e, 
-    roughness: 0.7 
-  });
-
-  // --- 공장 구조 지지용 세로 철골 H-Beam 기둥 배치 ---
-  const addPillar = (x, z) => {
-    addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-      size: [1.2, hallHeight, 1.2],
-      position: [x, 2 + offsetY, z],
-      color: 0x2e313b,
-      roughness: 0.5,
-      metalness: 0.9
-    });
-  };
-  addPillar(-10, -22.2); addPillar(-10, 22.2);
-  addPillar(15, -22.2);  addPillar(15, 22.2);
-  addPillar(40, -22.2);  addPillar(40, 22.2);
-
-  // --- 플레이어용 플로팅 세그먼트 메쉬 및 묵직한 하부 지지 콘크리트 철탑 생성 ---
-
-  // 1) 시작 플랫폼 (지면 Y = -0.5)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [12, 1, 12], 
-    position: [0, -0.5 + offsetY, 0], 
-    color: 0xa9b0c2,
-    roughness: 0.5
-  });
-  // 시작 플랫폼 지붕을 받치는 거대 하부 기둥 (Y = -0.5 ~ -15.5)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [4, 15, 4],
-    position: [0, -8.0 + offsetY, 0],
-    color: 0x6e7485,
-    roughness: 0.7
-  });
-
-  // 2) 가로막는 장애물 벽 (이 벽을 치즈를 밟아 올라가 넘어가야 함)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [2, 6, 12], 
-    position: [10, 2.5 + offsetY, 0], 
-    color: 0xbdc4d4,
-    roughness: 0.6
-  });
-
-  // 3) 중간 플랫폼 (하이 플랫폼 - 상단 높이 Y = 3.5 + 4.0 = 7.5 + offsetY)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [12, 8, 12], 
-    position: [22, 3.5 + offsetY, 0], 
-    color: 0xa9b0c2,
-    roughness: 0.5
-  });
-  // 중간 플랫폼 지붕을 받치는 거대 하부 기둥 (Y = 3.5 ~ -15.5)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [4, 19, 4],
-    position: [22, -6.0 + offsetY, 0],
-    color: 0x6e7485,
-    roughness: 0.7
-  });
-
-  // 4) 도착 골 플랫폼 (매우 높음 - 상단 높이 Y = 5.5 + 6.0 = 11.5 + offsetY)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [12, 12, 12], 
-    position: [42, 5.5 + offsetY, 0], 
-    color: 0x8e94a6,
-    roughness: 0.6
-  });
-  // 도착 골 플랫폼 지붕을 받치는 거대 하부 기둥 (Y = 5.5 ~ -15.5)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [4, 21, 4],
-    position: [42, -5.0 + offsetY, 0],
-    color: 0x6e7485,
-    roughness: 0.7
-  });
+  // 안쓰는 Photo Item (숨김)
+  const photoItemMesh = addBox(scene, physicsWorld, RAPIER, environmentObjects, { size: [0.1, 0.1, 0.1], position: [0, -10, 0], color: 0xffcc00, type: 'prop' });
+  photoItemMesh.visible = false;
+  return photoItemMesh;
 }

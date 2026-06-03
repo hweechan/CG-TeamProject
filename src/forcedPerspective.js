@@ -20,6 +20,7 @@ export class ForcedPerspective {
     this.heldObject = null;
     this.initialDistance = 0;
     this.initialScale = new THREE.Vector3(1, 1, 1);
+    this.initialRotationOffset = new THREE.Quaternion(); // object rotation relative to camera at pickup
     this.originalParent = null;
     this.originalMatrixAutoUpdate = true;
     this.boundingRadius = 0.5;
@@ -73,6 +74,11 @@ export class ForcedPerspective {
     box.getBoundingSphere(sphere);
     this.boundingRadius = sphere.radius || 0.5;
 
+    // Store object-to-camera rotation offset so we can tidal-lock the object to the camera.
+    // offsetQ = inverse(cameraQ) * objectQ
+    const invCamQ = this.camera.quaternion.clone().invert();
+    this.initialRotationOffset = invCamQ.multiply(this.heldObject.quaternion.clone());
+
     // exact math does not require skipped frames
     this.skipApplyFrames = 0;
 
@@ -81,11 +87,56 @@ export class ForcedPerspective {
       const rb = this.heldObject.userData.rigidBody;
       rb.setBodyType(this.RAPIER.RigidBodyType.KinematicPositionBased, true);
     }
+
+    // Always render held object on top (no depth occlusion by walls)
+    this.heldObject.traverse(child => {
+      if (child.isMesh && child.material) {
+        child.userData._savedDepthTest = child.material.depthTest;
+        child.userData._savedRenderOrder = child.renderOrder;
+        child.material = child.material.clone();
+        child.material.depthTest = false;
+        child.renderOrder = 999;
+      }
+    });
   }
 
   _onMouseUp(e) {
     if (e.button !== 0) return;
     if (!this.isHolding) return;
+
+    // Handle Forced Perspective Placement Math on DROP
+    if (this.heldObject) {
+      // Raycast to find the background wall/floor
+      this.raycaster.setFromCamera(this.center, this.camera);
+      const envHits = this.raycaster.intersectObjects(this.environmentObjects, true) || [];
+      let hitPoint = null;
+      for (let i = 0; i < envHits.length; i++) {
+        const obj = envHits[i].object;
+        if (this._isDescendantOf(obj, this.heldObject)) continue;
+        hitPoint = envHits[i].point.clone();
+        break;
+      }
+      
+      if (!hitPoint) {
+        const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+        hitPoint = this.camera.position.clone().addScaledVector(dir, 10);
+      }
+      
+      const hitDistance = this.camera.position.distanceTo(hitPoint);
+      const ratio = this.boundingRadius / this.initialDistance;
+      const newDistance = hitDistance / (1 + ratio);
+      
+      let scaleFactor = newDistance / this.initialDistance;
+      scaleFactor = Math.max(0.05, Math.min(100.0, scaleFactor));
+      
+      const actualDistance = scaleFactor * this.initialDistance;
+      const targetScale = this.initialScale.clone().multiplyScalar(scaleFactor);
+      
+      const centerRayDir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion).normalize();
+      const placePos = this.camera.position.clone().addScaledVector(centerRayDir, actualDistance);
+
+      this.heldObject.scale.copy(targetScale);
+      this.heldObject.position.copy(placePos);
 
     // Handle physics object release: update collider size and make dynamic again
     if (this.physicsWorld && this.RAPIER && this.heldObject && this.heldObject.userData.rigidBody) {
@@ -132,10 +183,22 @@ export class ForcedPerspective {
         rb.setBodyType(this.RAPIER.RigidBodyType.Fixed, true);
       }
     }
+    }
 
     // release and keep object at current transformed world position
     this.isHolding = false;
     if (this.heldObject) {
+      // Restore depth test / renderOrder
+      this.heldObject.traverse(child => {
+        if (child.isMesh && child.material) {
+          child.material.depthTest = child.userData._savedDepthTest !== undefined
+            ? child.userData._savedDepthTest
+            : true;
+          child.renderOrder = child.userData._savedRenderOrder !== undefined
+            ? child.userData._savedRenderOrder
+            : 0;
+        }
+      });
       this.heldObject.matrixAutoUpdate = this.originalMatrixAutoUpdate;
       this.heldObject = null;
     }
@@ -147,12 +210,23 @@ export class ForcedPerspective {
     // prevent default scrolling / zooming
     e.preventDefault();
 
-    // 휠 방향에 따른 회전: 아래(deltaY > 0) -> 시계방향, 위(deltaY < 0) -> 반시계방향
+    // 휘 방향에 따른 회전: 아래(deltaY > 0) -> 시계방향, 위(deltaY < 0) -> 반시계방향
     const rotationSpeed = Math.PI / 12; // 15도씩
-    const direction = e.deltaY > 0 ? -1 : 1; 
+    const direction = e.deltaY > 0 ? -1 : 1;
 
-    // Y축(월드 기준)으로 회전 적용
-    this.heldObject.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), direction * rotationSpeed);
+    // 동주기자전(Tidal-lock) 환경에서 휠 회전을 유지하려면,
+    // 객체의 월드 회전을 직접 바꾸지 말고 기준이 되는
+    // initialRotationOffset에 델타를 누적해야 한다.
+    // 월드 Y축 회전을 카메라 로컈 공간으로 변환: localAxis = invCamQ * worldY
+    const worldY = new THREE.Vector3(0, 1, 0);
+    const invCamQ = this.camera.quaternion.clone().invert();
+    const localAxis = worldY.clone().applyQuaternion(invCamQ).normalize();
+
+    // 로컈 Y축 기준 회전 쿼터니언 생성
+    const deltaQ = new THREE.Quaternion().setFromAxisAngle(localAxis, direction * rotationSpeed);
+
+    // initialRotationOffset에 누적 (offset = deltaQ * offset)
+    this.initialRotationOffset.premultiply(deltaQ);
   }
 
   update() {
@@ -164,49 +238,18 @@ export class ForcedPerspective {
       return;
     }
 
-    // find environment hit (wall/floor) from camera center
-    this.raycaster.setFromCamera(this.center, this.camera);
-    const envHits = this.raycaster.intersectObjects(this.environmentObjects, true) || [];
+    // While holding, keep the object at its initial relative distance and scale.
+    // The forced perspective math (raycasting to environment and scaling) is deferred until _onMouseUp.
+    this.heldObject.scale.copy(this.initialScale);
 
-    // pick first hit that's not the held object (or its children)
-    let hitPoint = null;
-    for (let i = 0; i < envHits.length; i++) {
-      const obj = envHits[i].object;
-      if (this._isDescendantOf(obj, this.heldObject)) continue;
-      hitPoint = envHits[i].point.clone();
-      break;
-    }
+    // Tidal-lock rotation: object stays fixed relative to the camera's view direction.
+    // worldRotation = cameraQ * initialRotationOffset
+    const worldRot = this.camera.quaternion.clone().multiply(this.initialRotationOffset);
+    this.heldObject.quaternion.copy(worldRot);
 
-    if (!hitPoint) {
-      // fallback: point straight ahead at some distance
-      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
-      hitPoint = this.camera.position.clone().addScaledVector(dir, 10);
-    }
-
-    // Calculate how far the hit point is
-    const hitDistance = this.camera.position.distanceTo(hitPoint);
-    
-    // Calculate ideal distance for the object center so it rests perfectly on the surface
-    // Scale ratio is determined exactly by the new depth geometry:
-    const ratio = this.boundingRadius / this.initialDistance;
-    const newDistance = hitDistance / (1 + ratio);
-    
-    let scaleFactor = newDistance / this.initialDistance;
-    
-    const SCALE_MIN = 0.05;
-    const SCALE_MAX = 100.0;
-    scaleFactor = Math.max(SCALE_MIN, Math.min(SCALE_MAX, scaleFactor));
-    
-    // Place exactly on the camera ray at the re-calculated distance
-    const actualDistance = scaleFactor * this.initialDistance;
-
-    // Apply scale instantly (no lerp = no jump in apparent size)
-    const targetScale = this.initialScale.clone().multiplyScalar(scaleFactor);
-    this.heldObject.scale.copy(targetScale);
-    
-    // Place exactly along the camera ray
+    // Place exactly along the camera ray at the initial distance
     const centerRayDir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion).normalize();
-    const placePos = this.camera.position.clone().addScaledVector(centerRayDir, actualDistance);
+    const placePos = this.camera.position.clone().addScaledVector(centerRayDir, this.initialDistance);
     
     // Convert to local if parented
     const localPos = placePos.clone();
