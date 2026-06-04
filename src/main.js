@@ -42,6 +42,7 @@ async function init() {
   
   // 첫 스테이지 로드
   currentStageData = loadStage(currentStageIndex, scene, physicsWorld, RAPIER, environmentObjects);
+  currentStageData._camera = camera;
   startPos = currentStageData.startPos;
   portal1Pos = currentStageData.portal1Pos;
   photoItemMesh = currentStageData.photoItemMesh;
@@ -166,13 +167,16 @@ async function init() {
       if (e.code === 'Digit2') jumpToStage(2);
       if (e.code === 'Digit3') jumpToStage(3);
       if (e.code === 'Digit4') jumpToStage(4);
-      if (e.code === 'Digit5') jumpToStage(5);
     }
   });
 
   document.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && fpsController.enabled && photoSystem.holding) {
-      photoSystem.stamp();
+    if (e.button === 0 && fpsController.enabled) {
+      if (photoSystem.holding) {
+        photoSystem.stamp();
+      } else if (currentStageData && currentStageData.onClick) {
+        currentStageData.onClick();
+      }
     }
   });
 
@@ -191,10 +195,15 @@ async function init() {
     
     currentStageIndex = index;
     if (sysStatus) {
-      sysStatus.textContent = `SYSTEM STATE: LOADED STAGE ${index}`;
+      sysStatus.textContent = `Current Stage : Stage ${index}`;
     }
 
-    // 1. 기존 메쉬 및 물리 자원 제거
+    // 1. 스테이지 자체 정리 (물리 바디 등 자체 자원을 먼저 해제)
+    if (currentStageData && currentStageData.cleanup) {
+      currentStageData.cleanup();
+    }
+
+    // 2. 나머지 메쉬 및 물리 자원 일괄 제거
     environmentObjects.forEach(obj => {
       scene.remove(obj);
       if (obj.geometry) obj.geometry.dispose();
@@ -207,11 +216,6 @@ async function init() {
       }
     });
     environmentObjects.length = 0;
-
-    // 1.5 기존 스테이지 정리 콜백 호출
-    if (currentStageData && currentStageData.cleanup) {
-      currentStageData.cleanup();
-    }
 
     // 2. 포토 시스템 초기화
     photoSystem.reset();
@@ -227,16 +231,16 @@ async function init() {
       console.warn("Invalid Stage Index");
       return;
     }
+    currentStageData._camera = camera;
     
     startPos = currentStageData.startPos;
     portal1Pos = currentStageData.portal1Pos;
     
     // 5. 플레이어 컨트롤러 업데이트
     fpsController.spawnPos = { x: startPos.x, y: startPos.y, z: startPos.z };
-    
     if (index === 1) fpsController.fallLimitY = -10;
     else if (index === 2) fpsController.fallLimitY = -115;
-    else if (index === 3) fpsController.fallLimitY = -210; // (will be handled by merged stage3)
+    else if (index === 3) fpsController.fallLimitY = -430;
     else if (index === 4) fpsController.fallLimitY = -310;
     else fpsController.fallLimitY = startPos.y - 30;
     
@@ -244,11 +248,7 @@ async function init() {
 
     photoSystem.updateItemMesh(currentStageData.photoItemMesh);
     
-    if (index === 2) {
-      photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
-      photoSystem.setProjectedAsset('ramp');
-    } else if (index === 3 || index === 4) {
-      // 스테이지 3, 4: GimmickDoor 기믹, 경사로 필요
+    if (currentStageData.photoType === 'ramp') {
       photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
       photoSystem.setProjectedAsset('ramp');
     } else {
@@ -264,12 +264,21 @@ async function init() {
       }
     }
     
-    // 스테이지 1에서는 치즈를 터널 내부(Z=30)에 배치
-    const itemStartPos = (currentStageIndex === 1) 
-      ? [startPos.x + 2, startPos.y + 2, 30] 
+    // 스테이지별 테스트 아이템 위치 및 타입 설정
+    const itemStartPos = (currentStageIndex === 1)
+      ? [startPos.x + 2, startPos.y + 2, 30]
+      : (currentStageIndex === 3)
+      ? [startPos.x + 3, startPos.y + 2, startPos.z + 10]
       : [startPos.x + 5, startPos.y + 2, startPos.z];
-    
-    if (currentStageIndex === 1) {
+
+    if (currentStageIndex === 3) {
+      testItem = createCube(scene, physicsWorld, RAPIER, {
+        size: [3, 3, 3],
+        position: itemStartPos,
+        color: 0xffdd88,
+        hasGravity: true
+      });
+    } else if (currentStageIndex === 1) {
       testItem = createCube(scene, physicsWorld, RAPIER, {
         size: [2, 2, 2],
         position: itemStartPos,
@@ -289,6 +298,7 @@ async function init() {
       });
     }
 
+<<<<<<< HEAD
     // pickableObjects 초기화 및 testItem 등록
     pickableObjects.length = 0;
     if (testItem) pickableObjects.push(testItem);
@@ -298,6 +308,10 @@ async function init() {
       pickableObjects.push(...currentStageData.customPickables);
     }
     
+=======
+    pickableObjects.length = 0;
+    pickableObjects.push(testItem);
+>>>>>>> origin/main
     fp.pickableObjects = pickableObjects;
     fp.environmentObjects = environmentObjects;
 
@@ -332,7 +346,7 @@ async function init() {
     }
 
     // 스테이지별 개별 로직 업데이트
-    if (currentStageData && currentStageData.update) {
+    if (hasStarted && currentStageData && currentStageData.update) {
       currentStageData.update(delta, camera.position, pickableObjects, fpsController, fp);
     }
 

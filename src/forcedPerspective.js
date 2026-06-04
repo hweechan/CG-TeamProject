@@ -92,12 +92,18 @@ export class ForcedPerspective {
 
     // Always render held object on top (no depth occlusion by walls)
     this.heldObject.userData._isHeld = true;
+
+
     this.heldObject.traverse(child => {
       if (child.isMesh && child.material) {
         child.userData._savedDepthTest = child.material.depthTest;
         child.userData._savedRenderOrder = child.renderOrder;
+        child.userData._savedTransparent = child.material.transparent;
+        child.userData._savedOpacity = child.material.opacity;
         child.material = child.material.clone();
         child.material.depthTest = false;
+        child.material.transparent = true;
+        child.material.opacity = 1.0;
         child.renderOrder = 999;
       }
     });
@@ -203,6 +209,12 @@ export class ForcedPerspective {
           child.material.depthTest = child.userData._savedDepthTest !== undefined
             ? child.userData._savedDepthTest
             : true;
+          child.material.transparent = child.userData._savedTransparent !== undefined
+            ? child.userData._savedTransparent
+            : false;
+          child.material.opacity = child.userData._savedOpacity !== undefined
+            ? child.userData._savedOpacity
+            : 1.0;
           child.renderOrder = child.userData._savedRenderOrder !== undefined
             ? child.userData._savedRenderOrder
             : 0;
