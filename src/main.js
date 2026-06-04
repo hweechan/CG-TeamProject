@@ -285,8 +285,8 @@ async function init() {
         color: 0xffdd88,
         hasGravity: true
       });
-    } else if (currentStageIndex === 3) {
-      // 스테이지 3은 기본 큐브/경사로 아이템을 생성하지 않음
+    } else if (currentStageIndex === 3 || currentStageIndex === 4) {
+      // 스테이지 3, 4는 기본 큐브/경사로 아이템을 생성하지 않음
       testItem = null;
     } else {
       testItem = createRamp(scene, physicsWorld, RAPIER, {
@@ -298,7 +298,6 @@ async function init() {
       });
     }
 
-<<<<<<< HEAD
     // pickableObjects 초기화 및 testItem 등록
     pickableObjects.length = 0;
     if (testItem) pickableObjects.push(testItem);
@@ -307,11 +306,6 @@ async function init() {
     if (currentStageData.customPickables) {
       pickableObjects.push(...currentStageData.customPickables);
     }
-    
-=======
-    pickableObjects.length = 0;
-    pickableObjects.push(testItem);
->>>>>>> origin/main
     fp.pickableObjects = pickableObjects;
     fp.environmentObjects = environmentObjects;
 
