@@ -1,229 +1,220 @@
 import * as THREE from 'three';
+import { GimmickInfiniteCorridor } from './gimmickInfiniteCorridor.js';
+import { createPictogram } from './object.js';
 
 export function loadStage3(scene, physicsWorld, RAPIER, environmentObjects) {
-  // 스테이지 2는 독립된 다른 공간 (y = -100) 에 배치하여 물리적 간섭 방지
-  const offsetY = -100;
-  
-  // 골 플랫폼 상단 (Y = 11.5) 지면이 도착지점
-  const portal1Pos = new THREE.Vector3(42, 11.5 + offsetY, 0); 
-  const startPos = new THREE.Vector3(0, 2 + offsetY, 0);
+  const offsetY = -200;
+  const startPos = new THREE.Vector3(0, 2 + offsetY, -10);
+  const portal1Pos = new THREE.Vector3(0, -9999, 0); 
 
-  buildStage3Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY);
-  buildPortalFrame(scene, physicsWorld, RAPIER, portal1Pos, environmentObjects);
-
-  // 실내 테마 포인트 조명들 추가 (아늑한 미래지향적 테스트실 분위기)
-  addStage2CeilingLights(scene, environmentObjects, offsetY);
-
-  // 스테이지 3 노란색 사진 아이템 (사용하지 않으므로 지하에 숨김)
-  const photoItemMesh = addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [0.1, 0.1, 0.1],
-    position: [0, -10 + offsetY, 0],
-    color: 0x000000,
-    type: 'prop'
+  const corridor = new GimmickInfiniteCorridor(scene, physicsWorld, RAPIER, environmentObjects, {
+    offsetY: offsetY,
+    width: 10,
+    height: 15,
+    depth: 40,
+    loopZ: 40,
+    returnZDelta: 40
   });
-  photoItemMesh.visible = false;
 
-  return { startPos, portal1Pos, photoItemMesh };
-}
+  const pickables = [];
+  const startRoomCenter = new THREE.Vector3(0, offsetY + 0.5, -10);
+  const snapZonePos = new THREE.Vector3(0, offsetY + 7.5, 39.9);
 
-function addBox(scene, physicsWorld, RAPIER, environmentObjects, { size, position, color = 0x888888, roughness = 0.7, metalness = 0.1, type }) {
-  let materials;
-  if (type === 'prop') {
-    materials = new THREE.MeshStandardMaterial({ color, roughness, metalness });
-  } else {
-    if (!type) {
-      type = (size[1] <= 1.5) ? 'floor' : 'wall';
+  // 스냅 존 가이드라인
+  const snapZone = new THREE.Mesh(
+    new THREE.PlaneGeometry(4, 2),
+    new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+  );
+  snapZone.position.copy(snapZonePos);
+  snapZone.visible = false;
+  scene.add(snapZone);
+
+  // 1. 초기 스냅되어 있는 유턴 표지판 생성
+  const uturnSign = createPictogram(scene, physicsWorld, RAPIER, {
+    texturePath: 'asset/uturn.jpg', type: 'uturn',
+    position: [snapZonePos.x, snapZonePos.y, snapZonePos.z],
+    scale: [3.333, 3.333, 3.333],
+    hasGravity: false // 처음엔 고정
+  });
+  uturnSign.userData.isSnapped = true;
+  pickables.push(uturnSign);
+
+  // 2. 시작 방 벽면에 장식용 가짜 표지판들 부착
+  const fakeTextures = [
+    'asset/leftturn.jpg', 'asset/staffonly.jpg', 'asset/toilet.png',
+    'asset/free-icon-caution-17317523.png', 'asset/free-icon-dance-4766750.png',
+    'asset/free-icon-gps-17317496.png', 'asset/free-icon-man-657680.png',
+    'asset/free-icon-man-9567125.png', 'asset/free-icon-man-9567155.png',
+    'asset/hospital.png', 'asset/message.png', 'asset/parking.png'
+  ];
+  
+  for (let i = 0; i < 120; i++) {
+    const wallType = Math.floor(Math.random() * 3); // 0: 왼쪽 벽, 1: 오른쪽 벽, 2: 뒷벽
+    let px, pz, rotY;
+    
+    // 시작방 좌표: X=-10~10, Z=-20~0, Y=offsetY ~ offsetY+15
+    const py = offsetY + 2 + Math.random() * 10;
+    
+    if (wallType === 0) {
+      px = -9.9; // 왼쪽 벽
+      pz = -19 + Math.random() * 18;
+      rotY = Math.PI / 2;
+    } else if (wallType === 1) {
+      px = 9.9; // 오른쪽 벽
+      pz = -19 + Math.random() * 18;
+      rotY = -Math.PI / 2;
+    } else {
+      px = -9 + Math.random() * 18; // 뒷벽
+      pz = -19.9;
+      rotY = 0;
     }
-    const matFloor = new THREE.MeshStandardMaterial({ color: 0x4b5320, roughness: 0.9, metalness: 0.1 });
-    const matCeil = new THREE.MeshStandardMaterial({ color: 0xffdab9, roughness: 0.9, metalness: 0.1 });
     
-    const canvas = document.createElement('canvas');
-    canvas.width = 4;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffdab9';
-    ctx.fillRect(0, 0, 4, 256);
-    const baseRatio = Math.min(1.0, 4 / size[1]);
-    const basePixels = Math.floor(256 * baseRatio);
-    ctx.fillStyle = '#32cd32';
-    ctx.fillRect(0, 256 - basePixels, 4, basePixels);
-    
-    const wallTex = new THREE.CanvasTexture(canvas);
-    wallTex.magFilter = THREE.NearestFilter; 
-    wallTex.minFilter = THREE.NearestFilter;
-    wallTex.colorSpace = THREE.SRGBColorSpace;
-    const matWallSide = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.8, metalness: 0.1 });
-    
-    if (type === 'floor') materials = matFloor;
-    else if (type === 'ceiling') materials = matCeil;
-    else materials = [matWallSide, matWallSide, matFloor, matCeil, matWallSide, matWallSide];
+    const fake = createPictogram(scene, physicsWorld, RAPIER, {
+      texturePath: fakeTextures[Math.floor(Math.random() * fakeTextures.length)],
+      type: 'fake',
+      position: [px, py, pz],
+      scale: [1.2 + Math.random(), 1.2 + Math.random(), 1.2 + Math.random()],
+      hasGravity: false
+    });
+    fake.rotation.y = rotY;
+    pickables.push(fake);
   }
 
-  const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
-  const mesh = new THREE.Mesh(geo, materials);
-  mesh.position.set(position[0], position[1], position[2]);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  scene.add(mesh);
-  environmentObjects.push(mesh);
+  // 3. 진짜 비상구 표지판 (다른 표지판의 1/6 정도 크기로 구석 바닥에 숨김)
+  const exitSign = createPictogram(scene, physicsWorld, RAPIER, {
+    texturePath: 'asset/exit.png', type: 'exit',
+    position: [9, offsetY + 0.5, -19], // 오른쪽 구석 바닥 부근
+    scale: [0.3, 0.3, 0.3], // 너무 작지 않은 0.3 스케일
+    hasGravity: false
+  });
+  pickables.push(exitSign);
 
-  const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-    .setTranslation(position[0], position[1], position[2]);
-  const body = physicsWorld.createRigidBody(bodyDesc);
-  const colliderDesc = RAPIER.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2);
-  physicsWorld.createCollider(colliderDesc, body);
+  // ── 끝 방 모니터 (스테이지 1, 2와 동일한 외형) ──
+  const monX = 0, monY = offsetY, monZ = 58;
+  const monitorGroup = new THREE.Group();
   
-  mesh.userData.rigidBody = body;
+  const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 1.0), new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.6 }));
+  baseMesh.position.set(monX, monY + 0.05, monZ);
+  baseMesh.castShadow = true; baseMesh.receiveShadow = true;
+  monitorGroup.add(baseMesh);
 
-  return mesh;
-}
+  const neckMesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 0.4), new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 }));
+  neckMesh.position.set(monX, monY + 0.4, monZ);
+  neckMesh.castShadow = true; neckMesh.receiveShadow = true;
+  monitorGroup.add(neckMesh);
 
-function buildPortalFrame(scene, physicsWorld, RAPIER, position, environmentObjects) {
-  const OPENING_W = 3;
-  const OPENING_H = 3.5;
-  const T = 0.4;
-  const frameStyle = { color: 0xaa2222, roughness: 0.3, metalness: 0.8, type: 'prop' }; // 스테이지3 골 포탈 색상 다르게
+  const bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.0, 0.3), new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 }));
+  bodyMesh.position.set(monX, monY + 1.8, monZ);
+  bodyMesh.castShadow = true; bodyMesh.receiveShadow = true;
+  monitorGroup.add(bodyMesh);
 
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [T, OPENING_H, T],
-    position: [position.x - OPENING_W / 2 - T / 2, position.y + OPENING_H / 2, position.z], ...frameStyle
-  });
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [T, OPENING_H, T],
-    position: [position.x + OPENING_W / 2 + T / 2, position.y + OPENING_H / 2, position.z], ...frameStyle
-  });
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, {
-    size: [OPENING_W + T * 2, T, T],
-    position: [position.x, position.y + OPENING_H + T / 2, position.z], ...frameStyle
-  });
-
-  const portalGeo = new THREE.PlaneGeometry(OPENING_W, OPENING_H);
-  const portalMat = new THREE.MeshBasicMaterial({ color: 0xff33aa, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
-  const portalMesh = new THREE.Mesh(portalGeo, portalMat);
-  portalMesh.position.set(position.x, position.y + OPENING_H / 2, position.z);
-  scene.add(portalMesh);
-}
-
-function addStage2CeilingLights(scene, environmentObjects, offsetY) {
-  const neonPink = 0xff00bb;
-  const warmYellow = 0xffaa00;
-
-  const createHangingLight = (x, y, z, color) => {
-    // 1. 약간 내려오는 전선/케이블 에셋
-    const wireGeo = new THREE.BoxGeometry(0.04, 4, 0.04);
-    const wireMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
-    const wireMesh = new THREE.Mesh(wireGeo, wireMat);
-    wireMesh.position.set(x, y - 2 + offsetY, z); 
-    scene.add(wireMesh);
-    environmentObjects.push(wireMesh);
-
-    // 2. 조명 펜던트 바디
-    const fixtureGeo = new THREE.BoxGeometry(1.0, 0.4, 1.0);
-    const fixtureMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4, metalness: 0.8 });
-    const fixtureMesh = new THREE.Mesh(fixtureGeo, fixtureMat);
-    fixtureMesh.position.set(x, y - 4 + offsetY, z);
-    scene.add(fixtureMesh);
-    environmentObjects.push(fixtureMesh);
-
-    // 3. 실제 하강식 포인트 조명
-    const pLight = new THREE.PointLight(color, 5.0, 50);
-    pLight.decay = 1.0;
-    pLight.position.set(x, y - 5 + offsetY, z);
-    pLight.castShadow = true;
-    scene.add(pLight);
-    environmentObjects.push(pLight);
-  };
-
-  // 시작점 천장 조명
-  createHangingLight(5, 40, 0, warmYellow);
-  // 골 지점 천장 조명
-  createHangingLight(45, 40, 0, neonPink);
-}
-
-function buildStage3Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY) {
-  // 거대한 실내 챔버 공간 한계 정의
-  const roomLength = 70;
-  const roomWidth = 50;
-  const wallHeight = 40;
-  const cx = 25; // 중심 X 좌표
+  const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 1.8), new THREE.MeshBasicMaterial({ color: 0x00ffcc, side: THREE.DoubleSide }));
+  screenMesh.position.set(monX, monY + 1.8, monZ - 0.16);
+  monitorGroup.add(screenMesh);
+  scene.add(monitorGroup);
   
-  // 1. 거대한 방의 바닥 (Y = -0.5, 윗면은 Y=0)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [roomLength, 1, roomWidth], 
-    position: [cx, -0.5 + offsetY, 0], 
-    color: 0x3a3d46, 
-    roughness: 0.8 
-  });
+  const monitorBody = physicsWorld.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(monX, monY + 1.4, monZ));
+  physicsWorld.createCollider(RAPIER.ColliderDesc.cuboid(1.6, 1.4, 0.5), monitorBody);
 
-  // 2. 웅장한 실내 천장 (Y = 40.5)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [roomLength, 1, roomWidth], 
-    position: [cx, wallHeight + 0.5 + offsetY, 0], 
-    color: 0x5e6370, 
-    roughness: 0.7,
-    type: 'ceiling'
-  });
+  let gimmickDone = false;
 
-  // 3. 사방의 외벽
-  // 왼쪽 뒷벽 (X = -10)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [1, wallHeight, roomWidth], 
-    position: [-10.5, wallHeight / 2 + offsetY, 0], 
-    color: 0x767c8e, 
-    roughness: 0.6 
-  });
-  // 오른쪽 앞벽 (X = 60)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [1, wallHeight, roomWidth], 
-    position: [60.5, wallHeight / 2 + offsetY, 0], 
-    color: 0x767c8e, 
-    roughness: 0.6 
-  });
-  // Z쪽 벽 (Z = 25)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [roomLength, wallHeight, 1], 
-    position: [cx, wallHeight / 2 + offsetY, 25.5], 
-    color: 0x767c8e, 
-    roughness: 0.7 
-  });
-  // -Z쪽 벽 (Z = -25)
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [roomLength, wallHeight, 1], 
-    position: [cx, wallHeight / 2 + offsetY, -25.5], 
-    color: 0x767c8e, 
-    roughness: 0.7 
-  });
+  function update(delta, cameraPos, pickableObjects, fpsController, fp) {
+    if (gimmickDone) {
+      portal1Pos.set(0, offsetY + 4, 55);
+    } else {
+      portal1Pos.set(0, -9999, 0); // 닫혀있음
+    }
 
-  // --- 실내 지형 구조 (계단식) ---
+    let hasExitSignSnapped = false;
 
-  // 1) 시작 구역 (Tier 1)은 Y=0 바닥을 그대로 사용. (X: -10 ~ 10)
+    // 모든 픽토그램 순회하며 스냅 로직 적용
+    for (let i = 0; i < pickables.length; i++) {
+      const picto = pickables[i];
+      
+      // 누군가 스냅된 물체를 다시 짚었으면 스냅 해제
+      if (picto.userData.isSnapped && picto.userData._isHeld) {
+        picto.userData.isSnapped = false;
+        // 강제원근법 로직이 놓을 때 알아서 dynamic으로 복구함
+      }
+      
+      // 스냅 판정 (잡고 있는 상태 + 거리가 가깝고 + 스케일이 어느정도 커졌을 때 자석효과 발동)
+      // 잡고 있는 중에는 스냅 판정을 건너뛰어 다시 떼어낼 수 있게 함!
+      if (!picto.userData.isSnapped && !picto.userData._isHeld) {
+        const dist = picto.position.distanceTo(snapZonePos);
+        // 표지판 스케일이 2.0 이상이고 스냅존 반경 3.5 안에 있으면 스냅!
+        if (picto.scale.y > 2.0 && dist < 3.5) {
+          picto.userData.isSnapped = true;
+          
+          if (fp && fp.isHolding && fp.heldObject === picto) {
+            fp.forceDrop();
+          }
+          
+          const targetScale = new THREE.Vector3(3.333, 3.333, 3.333);
+          picto.scale.copy(targetScale);
+          // Z-fighting이나 투명도 정렬 이슈로 숨겨지는 것을 방지하기 위해 0.05만큼 앞으로 돌출시킴
+          picto.position.set(snapZonePos.x, snapZonePos.y, snapZonePos.z - 0.05);
+          picto.rotation.set(0, 0, 0);
+          
+          // 물리 업데이트를 큐 뒤로 미룸
+          setTimeout(() => {
+            if (picto.userData.rigidBody) {
+              picto.userData.rigidBody.setTranslation(snapZonePos.x, snapZonePos.y, snapZonePos.z - 0.05, true);
+              picto.userData.rigidBody.setRotation({x:0, y:0, z:0, w:1}, true);
+              // BodyType을 바꾸는 것은 물리 엔진 에러를 유발하므로
+              // 타입은 그대로(Dynamic) 두고 속도만 0으로 만들어서 멈춰있게 함 (무중력이므로 떨어지지 않음)
+              picto.userData.rigidBody.setLinvel({x: 0, y: 0, z: 0}, true);
+              picto.userData.rigidBody.setAngvel({x: 0, y: 0, z: 0}, true);
+              
+              // 벽과 정확히 겹쳤을 때 물리 엔진이 폭주(unreachable)하는 것을 방지하기 위해 콜라이더 영구 삭제
+              if (picto.userData.collider && typeof physicsWorld !== 'undefined') {
+                physicsWorld.removeCollider(picto.userData.collider, true);
+                picto.userData.collider = null;
+              }
+            }
+          }, 0);
+        }
+      }
+      
+      // 현재 스냅된 물체가 무엇인지 확인
+      if (picto.userData.isSnapped && picto.userData.pictoType === 'exit') {
+        hasExitSignSnapped = true;
+      }
+    }
 
-  // 2) 가로막는 거대한 장애물 벽 (X = 10, 높이 = 6)
-  // 방의 전체 너비(Z)를 꽉 채우도록 방해물 배치
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [2, 6, roomWidth], 
-    position: [10, 2.5 + offsetY, 0], 
-    color: 0xbdc4d4,
-    roughness: 0.6
-  });
+    // 비상구 표지판이 스냅되어 있으면 문 오픈, 아니면 무한 루프 가동
+    if (hasExitSignSnapped) {
+      if (!gimmickDone) {
+        console.log('[Stage3] 비상구 스냅 완료! 무한 루프 탈출 가능');
+        gimmickDone = true;
+        corridor.loopZ = 99999;
+      }
+    } else {
+      if (gimmickDone) {
+        console.log('[Stage3] 비상구가 제거됨. 다시 무한 루프로 복귀');
+        gimmickDone = false;
+        corridor.loopZ = 40;
+      }
+      corridor.update(cameraPos, fpsController);
+    }
+  }
 
-  // 3) 중간 구역 (Tier 2)
-  // X = 11 ~ 35 까지 바닥이 통째로 솟아오름 (상단 Y = 7.5)
-  // 11부터 35까지 길이 24. 중심은 X = 23
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [24, 7.5, roomWidth], 
-    position: [23, 7.5 / 2 - 0.5 + offsetY, 0], 
-    color: 0xa9b0c2,
-    roughness: 0.5
-  });
+  // 더미 메쉬 (photoSystem.js 크래시 방지)
+  const dummyPhotoMesh = new THREE.Mesh();
+  dummyPhotoMesh.visible = false;
+  
+  function cleanup() {
+    pickables.forEach(p => {
+      scene.remove(p);
+      if (p.geometry) p.geometry.dispose();
+      if (p.material) {
+        if (Array.isArray(p.material)) p.material.forEach(m => m.dispose());
+        else p.material.dispose();
+      }
+      if (p.userData.rigidBody && typeof physicsWorld !== 'undefined') {
+        physicsWorld.removeRigidBody(p.userData.rigidBody);
+      }
+    });
+  }
 
-  // 4) 도착 구역 (Tier 3)
-  // X = 35 ~ 60 까지 바닥이 한 번 더 솟아오름 (상단 Y = 11.5)
-  // 35부터 60까지 길이 25. 중심은 X = 47.5
-  addBox(scene, physicsWorld, RAPIER, environmentObjects, { 
-    size: [25, 11.5, roomWidth], 
-    position: [47.5, 11.5 / 2 - 0.5 + offsetY, 0], 
-    color: 0x8e94a6,
-    roughness: 0.6
-  });
+  return { startPos, portal1Pos, photoItemMesh: dummyPhotoMesh, customPickables: pickables, update, cleanup };
 }

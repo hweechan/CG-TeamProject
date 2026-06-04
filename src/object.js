@@ -31,13 +31,53 @@ export function createRamp(scene, physicsWorld, RAPIER, { size, position, rotati
   return createPhysicsMesh(scene, physicsWorld, RAPIER, geo, { position, rotation, color, roughness, metalness, hasGravity });
 }
 
+export function createPictogram(scene, physicsWorld, RAPIER, { texturePath, type, position, rotation, scale, size = [1.2, 0.6, 0.02], hasGravity = true }) {
+  // 이미지 로드
+  const textureLoader = new THREE.TextureLoader();
+  const tex = textureLoader.load(texturePath); 
+  tex.colorSpace = THREE.SRGBColorSpace;
+  
+  // 픽토그램 메쉬를 위한 박스 지오메트리
+  const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
+  
+  // createPhysicsMesh를 활용하여 물리 객체 생성
+  const mesh = createPhysicsMesh(scene, physicsWorld, RAPIER, geo, { 
+    position, 
+    rotation, 
+    color: 0xffffff, 
+    roughness: 0.2, 
+    metalness: 0.1, 
+    hasGravity,
+    map: tex, 
+    emissive: 0x444444,
+    emissiveMap: tex,
+    emissiveIntensity: 0.8 
+  });
+  
+  if (scale) {
+    mesh.scale.set(scale[0], scale[1], scale[2]);
+    // 스케일에 따른 콜라이더 크기는 ForcedPerspective가 잡았을 때 업데이트 됨
+    // 혹은 처음부터 작은 크기를 원하면 크기에 맞게 박스를 재생성하는 것이 맞지만,
+    // 이 코드 구조상 나중에 ForcedPerspective에서 마우스다운/업 할때 충돌체가 리사이즈 됨
+  }
+  
+  mesh.userData.pictoType = type; // 스냅 로직 판별용
+  return mesh;
+}
+
 export function createCube(scene, physicsWorld, RAPIER, { size, position, rotation, color = 0x3366ff, roughness = 0.7, metalness = 0.1, hasGravity = true }) {
   const geo = new THREE.BoxGeometry(size[0], size[1], size[2]);
   return createPhysicsMesh(scene, physicsWorld, RAPIER, geo, { position, rotation, color, roughness, metalness, hasGravity });
 }
 
-function createPhysicsMesh(scene, physicsWorld, RAPIER, geometry, { position, rotation, color, roughness, metalness, hasGravity }) {
-  const mat = new THREE.MeshStandardMaterial({ color, roughness, metalness });
+function createPhysicsMesh(scene, physicsWorld, RAPIER, geometry, { position, rotation, color, roughness, metalness, hasGravity, map, emissive, emissiveMap, emissiveIntensity }) {
+  const matParams = { color, roughness, metalness };
+  if (map) matParams.map = map;
+  if (emissive !== undefined) matParams.emissive = emissive;
+  if (emissiveMap !== undefined) matParams.emissiveMap = emissiveMap;
+  if (emissiveIntensity !== undefined) matParams.emissiveIntensity = emissiveIntensity;
+  
+  const mat = new THREE.MeshStandardMaterial(matParams);
   const mesh = new THREE.Mesh(geometry, mat);
   mesh.position.set(position[0], position[1], position[2]);
   if (rotation) {
@@ -50,9 +90,13 @@ function createPhysicsMesh(scene, physicsWorld, RAPIER, geometry, { position, ro
   mesh.userData.isDynamic = hasGravity; // 나중에 중력 적용 여부 알 수 있게 저장
 
   if (physicsWorld && RAPIER) {
-    // 중력이 있으면 Dynamic, 없으면 Kinematic/Fixed
-    const bodyType = hasGravity ? RAPIER.RigidBodyDesc.dynamic() : RAPIER.RigidBodyDesc.fixed();
-    const bodyDesc = bodyType.setTranslation(position[0], position[1], position[2]);
+    // Fixed 바디를 잡아서 Kinematic으로 바꿀 때 발생하는 Rapier Rust Aliasing 에러 방지.
+    // 모두 Dynamic 바디로 생성하되, 중력이 없어야 하면 gravityScale을 0으로 설정합니다.
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(position[0], position[1], position[2]);
+    if (!hasGravity) {
+      bodyDesc.setGravityScale(0.0);
+    }
+    
     if (rotation) {
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rotation[0], rotation[1], rotation[2]));
       bodyDesc.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w });
@@ -65,6 +109,7 @@ function createPhysicsMesh(scene, physicsWorld, RAPIER, geometry, { position, ro
     let colliderDesc = RAPIER.ColliderDesc.convexHull(vertices);
     
     if (colliderDesc) {
+      // 중력이 없는 객체는 허공에 둥둥 떠있게 하고자 할 때 마찰력을 주거나 질량을 조정할 수 있음
       const collider = physicsWorld.createCollider(colliderDesc, body);
       mesh.userData.rigidBody = body;
       mesh.userData.collider = collider;

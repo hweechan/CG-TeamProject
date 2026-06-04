@@ -236,7 +236,8 @@ async function init() {
     
     if (index === 1) fpsController.fallLimitY = -10;
     else if (index === 2) fpsController.fallLimitY = -115;
-    else fpsController.fallLimitY = startPos.y - 30; // 더미 스테이지 추락 방지
+    else if (index === 3) fpsController.fallLimitY = -210;
+    else fpsController.fallLimitY = startPos.y - 30;
     
     fpsController.teleport(startPos.x, startPos.y, startPos.z);
 
@@ -246,7 +247,8 @@ async function init() {
       photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
       photoSystem.setProjectedAsset('ramp');
     } else if (index === 3) {
-      photoSystem.setValidZone(new THREE.Vector3(15, -108, -10), new THREE.Vector3(50, -85, 10));
+      // 스테이지 3: GimmickDoor 기믹, 경사로 필요
+      photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
       photoSystem.setProjectedAsset('ramp');
     } else {
       photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
@@ -254,9 +256,11 @@ async function init() {
     }
 
     // 6. 테스트용 치즈 재배치
-    scene.remove(testItem);
-    if (testItem.userData.rigidBody) {
-      physicsWorld.removeRigidBody(testItem.userData.rigidBody);
+    if (testItem) {
+      scene.remove(testItem);
+      if (testItem.userData && testItem.userData.rigidBody) {
+        physicsWorld.removeRigidBody(testItem.userData.rigidBody);
+      }
     }
     
     // 스테이지 1에서는 치즈를 터널 내부(Z=30)에 배치
@@ -271,6 +275,9 @@ async function init() {
         color: 0xffdd88,
         hasGravity: true
       });
+    } else if (currentStageIndex === 3) {
+      // 스테이지 3은 기본 큐브/경사로 아이템을 생성하지 않음
+      testItem = null;
     } else {
       testItem = createRamp(scene, physicsWorld, RAPIER, {
         size: [4, 4, 6],
@@ -281,8 +288,16 @@ async function init() {
       });
     }
 
-    pickableObjects[0] = testItem;
-    fp.pickableObjects[0] = testItem;
+    // pickableObjects 초기화 및 testItem 등록
+    pickableObjects.length = 0;
+    if (testItem) pickableObjects.push(testItem);
+    
+    // 스테이지에서 던져준 커스텀 잡기 가능 물체가 있다면 등록
+    if (currentStageData.customPickables) {
+      pickableObjects.push(...currentStageData.customPickables);
+    }
+    
+    fp.pickableObjects = pickableObjects;
     fp.environmentObjects = environmentObjects;
 
     fpsController.enabled = true;
@@ -315,9 +330,9 @@ async function init() {
       return;
     }
 
-    // 스테이지 전용 루프 콜백
+    // 스테이지별 개별 로직 업데이트
     if (currentStageData && currentStageData.update) {
-      currentStageData.update(delta, camera.position, pickableObjects);
+      currentStageData.update(delta, camera.position, pickableObjects, fpsController, fp);
     }
 
     fpsController.update(delta);

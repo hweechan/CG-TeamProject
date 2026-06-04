@@ -49,7 +49,7 @@ export class ForcedPerspective {
     if (!intersects || intersects.length === 0) return;
 
     const hit = intersects[0];
-    this.heldObject = hit.object;
+    this.heldObject = hit.object.userData.parentGroup || hit.object;
     this.isHolding = true;
 
     this.originalParent = this.heldObject.parent;
@@ -82,13 +82,16 @@ export class ForcedPerspective {
     // exact math does not require skipped frames
     this.skipApplyFrames = 0;
 
-    // Change rigid body to Kinematic if it has physics
+    // 들고 있는 동안 플레이어와 충돌하지 않도록 콜라이더 삭제 (점프 불가/끼임 버그 방지)
     if (this.physicsWorld && this.RAPIER && this.heldObject.userData.rigidBody) {
-      const rb = this.heldObject.userData.rigidBody;
-      rb.setBodyType(this.RAPIER.RigidBodyType.KinematicPositionBased, true);
+      if (this.heldObject.userData.collider) {
+        this.physicsWorld.removeCollider(this.heldObject.userData.collider, true);
+        this.heldObject.userData.collider = null;
+      }
     }
 
     // Always render held object on top (no depth occlusion by walls)
+    this.heldObject.userData._isHeld = true;
     this.heldObject.traverse(child => {
       if (child.isMesh && child.material) {
         child.userData._savedDepthTest = child.material.depthTest;
@@ -148,46 +151,52 @@ export class ForcedPerspective {
       }
       
       // Update collision volume based on new scale
-      // Extract position buffer and apply current scale to support any geometric shape (Box, Wedge, etc.)
-      const posAttr = this.heldObject.geometry.getAttribute('position');
-      const vertices = new Float32Array(posAttr.array.length);
+      let newColliderDesc = null;
       const scale = this.heldObject.scale;
       
-      for(let i=0; i<posAttr.count; i++) {
-         vertices[i*3] = posAttr.getX(i) * scale.x;
-         vertices[i*3+1] = posAttr.getY(i) * scale.y;
-         vertices[i*3+2] = posAttr.getZ(i) * scale.z;
-      }
-      
-      let newColliderDesc = this.RAPIER.ColliderDesc.convexHull(vertices);
-      
-      // Fallback fallback to bounding box cuboid if convex hull fails
-      if (!newColliderDesc) {
-        this.heldObject.geometry.computeBoundingBox();
-        const box = this.heldObject.geometry.boundingBox;
-        const hx = ((box.max.x - box.min.x) / 2) * Math.abs(scale.x);
-        const hy = ((box.max.y - box.min.y) / 2) * Math.abs(scale.y);
-        const hz = ((box.max.z - box.min.z) / 2) * Math.abs(scale.z);
-        newColliderDesc = this.RAPIER.ColliderDesc.cuboid(hx, hy, hz);
+      if (this.heldObject.geometry) {
+        // 단일 메쉬인 경우: 정점을 스케일링하여 ConvexHull 또는 Box 생성
+        const posAttr = this.heldObject.geometry.getAttribute('position');
+        const vertices = new Float32Array(posAttr.array.length);
+        for(let i=0; i<posAttr.count; i++) {
+           vertices[i*3] = posAttr.getX(i) * scale.x;
+           vertices[i*3+1] = posAttr.getY(i) * scale.y;
+           vertices[i*3+2] = posAttr.getZ(i) * scale.z;
+        }
+        newColliderDesc = this.RAPIER.ColliderDesc.convexHull(vertices);
+        
+        if (!newColliderDesc) {
+          this.heldObject.geometry.computeBoundingBox();
+          const box = this.heldObject.geometry.boundingBox;
+          const hx = ((box.max.x - box.min.x) / 2) * Math.abs(scale.x);
+          const hy = ((box.max.y - box.min.y) / 2) * Math.abs(scale.y);
+          const hz = ((box.max.z - box.min.z) / 2) * Math.abs(scale.z);
+          newColliderDesc = this.RAPIER.ColliderDesc.cuboid(hx, hy, hz);
+        }
+      } else {
+        // 그룹(여러 메쉬)인 경우: 전체 BoundingBox를 계산하여 Box 생성
+        const box = new THREE.Box3().setFromObject(this.heldObject);
+        // Box3 크기의 절반이 cuboid의 half-extents가 됨
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        newColliderDesc = this.RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2);
       }
       
       this.heldObject.userData.collider = this.physicsWorld.createCollider(newColliderDesc, rb);
 
-      // Restore body type according to original dynamic state
+      // Restore physical state
       rb.setTranslation(this.heldObject.position, true);
       rb.setRotation(this.heldObject.quaternion, true);
-      if (this.heldObject.userData.isDynamic !== false) {
-        rb.setBodyType(this.RAPIER.RigidBodyType.Dynamic, true);
-        rb.wakeUp();
-      } else {
-        rb.setBodyType(this.RAPIER.RigidBodyType.Fixed, true);
-      }
+      
+      rb.wakeUp();
     }
     }
 
     // release and keep object at current transformed world position
     this.isHolding = false;
     if (this.heldObject) {
+      // Clear held flag
+      this.heldObject.userData._isHeld = false;
       // Restore depth test / renderOrder
       this.heldObject.traverse(child => {
         if (child.isMesh && child.material) {
@@ -200,6 +209,15 @@ export class ForcedPerspective {
         }
       });
       this.heldObject.matrixAutoUpdate = this.originalMatrixAutoUpdate;
+      this.heldObject = null;
+    }
+  }
+
+  // 외부(스테이지 로직 등)에서 물리 에러 없이 안전하게 객체를 떨어뜨리기 위한 메서드
+  forceDrop() {
+    if (this.isHolding && this.heldObject) {
+      this.isHolding = false;
+      this.heldObject.userData._isHeld = false;
       this.heldObject = null;
     }
   }
@@ -256,15 +274,19 @@ export class ForcedPerspective {
     if (this.heldObject.parent) this.heldObject.parent.worldToLocal(localPos);
     this.heldObject.position.copy(localPos);
 
-    // Update kinematic rigid body position so physics stays in sync while holding
+    // Update physical rigid body position so physics stays in sync while holding
     if (this.physicsWorld && this.heldObject.userData.rigidBody) {
       const rb = this.heldObject.userData.rigidBody;
-      rb.setNextKinematicTranslation(this.heldObject.position);
-      
-      if (rb.setNextKinematicRotation) {
-        rb.setNextKinematicRotation(this.heldObject.quaternion);
+      if (rb.bodyType() === this.RAPIER.RigidBodyType.KinematicPositionBased) {
+        rb.setNextKinematicTranslation(this.heldObject.position);
+        if (rb.setNextKinematicRotation) rb.setNextKinematicRotation(this.heldObject.quaternion);
+        else rb.setRotation(this.heldObject.quaternion, true);
       } else {
+        // Dynamic 바디인 경우 강제로 위치 동기화 및 속도 리셋
+        rb.setTranslation(this.heldObject.position, true);
         rb.setRotation(this.heldObject.quaternion, true);
+        rb.setLinvel({x: 0, y: 0, z: 0}, true);
+        rb.setAngvel({x: 0, y: 0, z: 0}, true);
       }
     }
   }

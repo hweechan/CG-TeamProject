@@ -158,16 +158,20 @@ export class FPSController {
     this.camera.quaternion.setFromEuler(euler);
   }
 
-  teleport(x, y, z) {
+  teleport(x, y, z, keepOrientation = false) {
     // 순간이동 직후에도 physics translation이 즉시 반영되도록 함
     this.body.setNextKinematicTranslation({ x, y, z });
     // Rapier 특성상 한 프레임 뒤에 적용되는 문제를 막기 위해 translation도 수동 업데이트
     this.body.setTranslation({ x, y, z }, true); 
     this.verticalVelocity = 0;
-    this.yaw = 0;
-    this.pitch = 0;
+    
+    if (!keepOrientation) {
+      this.yaw = 0;
+      this.pitch = 0;
+      this.camera.quaternion.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ'));
+    }
+    
     const camOffset = PLAYER_HEIGHT / 2 - 0.15;
     this.camera.position.set(x, y + camOffset, z);
-    this.camera.quaternion.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ'));
   }
 }
