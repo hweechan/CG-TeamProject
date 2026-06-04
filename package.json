@@ -10,20 +10,7 @@
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
-    "@tailwindcss/vite": "^4.3.0",
-    "lucide-react": "^0.479.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "tailwindcss": "^4.3.0",
     "three": "^0.184.0",
-    "three-bvh-csg": "^0.0.18",
-    "three-mesh-bvh": "^0.9.10",
     "vite": "^8.0.14"
-  },
-  "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.3.4",
-    "typescript": "^5.7.3"
   }
 }
