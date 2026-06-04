@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 
-export function loadStage3(scene, physicsWorld, RAPIER, environmentObjects) {
+export function loadStage4(scene, physicsWorld, RAPIER, environmentObjects) {
   const offsetY = -400;
   const startPos = new THREE.Vector3(0, 2 + offsetY, 5);
   const monitorBasePos = new THREE.Vector3(0, 0 + offsetY, 93);
   const portal1Pos = new THREE.Vector3(monitorBasePos.x, monitorBasePos.y + 1.8, monitorBasePos.z);
 
-  const interactables = buildStage3Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY);
+  const interactables = buildStage4Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY);
   buildMonitorConsole(scene, physicsWorld, RAPIER, monitorBasePos, environmentObjects);
   addLights(scene, environmentObjects, offsetY);
 
@@ -19,7 +19,7 @@ export function loadStage3(scene, physicsWorld, RAPIER, environmentObjects) {
     Object.assign(tutorialTrompe.style, {
       position: 'fixed', top: '20%', left: '50%',
       transform: 'translate(-50%, -50%)',
-      color: '#00ffcc', fontFamily: "'Noto Sans KR', sans-serif", fontSize: '24px',
+      color: '#00ffcc', fontFamily: 'monospace', fontSize: '24px',
       textShadow: '2px 2px 4px #000',
       zIndex: '100', pointerEvents: 'none', display: 'none',
       textAlign: 'center'
@@ -212,7 +212,7 @@ function addBox(scene, physicsWorld, RAPIER, environmentObjects, { size, positio
   return mesh;
 }
 
-function buildStage3Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY) {
+function buildStage4Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY) {
   // ===== Room 1: Starting room (30 wide, Z: 0~26, height 15) =====
   addBox(scene, physicsWorld, RAPIER, environmentObjects, {
     size: [30, 1, 26], position: [0, -0.5 + offsetY, 13]
@@ -329,7 +329,7 @@ function buildStage3Map(scene, physicsWorld, RAPIER, environmentObjects, offsetY
 
   const doorSize = [30, 8, 1];
   const doorGeo = new THREE.BoxGeometry(...doorSize);
-  const doorMat = new THREE.MeshStandardMaterial({ color: 0x00ccff, transparent: true, opacity: 0.7, depthWrite: false });
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x00ccff, transparent: true, opacity: 0.7 });
   const doorMesh = new THREE.Mesh(doorGeo, doorMat);
   doorMesh.position.set(0, 4 + offsetY, 85);
   scene.add(doorMesh);

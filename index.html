@@ -3,14 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Web Viewfinder</title>
+  <title>Superliminal : Perception is Reality</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Noto Sans KR', sans-serif; }
+    .font-mono { font-family: 'Noto Sans KR', sans-serif !important; }
     canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; }
     
     @keyframes loading {
@@ -51,12 +55,12 @@
           </div>
           <div class="flex flex-col">
             <h1 class="text-sm font-bold font-mono tracking-wider text-white flex items-center gap-2">
-              VIEWFINDER PROTOTYPE
+              SUPERLIMINAL
               <span class="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[9px] rounded uppercase">Beta</span>
             </h1>
             <div class="text-[10px] font-mono text-slate-400 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span id="sys-status">SYSTEM STATE: NOMINAL</span>
+              <span id="sys-status">Current Stage : Stage 1</span>
             </div>
             <div class="text-[10px] font-mono text-cyan-400 mt-1 tracking-wider" id="player-coords">
               POS: X: 0.00 | Y: 0.00 | Z: 0.00
@@ -101,8 +105,8 @@
           <i data-lucide="gamepad" class="w-8 h-8 text-emerald-400"></i>
         </div>
         <div class="space-y-2">
-          <h2 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Web Viewfinder</h2>
-          <p class="text-slate-400 text-sm">강제 원근법(Forced Perspective)을 활용한 3D 공간 퍼즐 데모</p>
+          <h2 class="text-2xl font-bold tracking-tight text-white sm:text-3xl">Superliminal : Perception is Reality</h2>
+          <p class="text-slate-400 text-sm">강제 원근법(Forced Perspective)을 활용한 3D 공간 퍼즐</p>
         </div>
         <div class="bg-slate-950/60 p-4 border border-slate-800 rounded-xl text-left space-y-3.5 text-xs text-slate-300">
           <h3 class="font-bold text-slate-400 font-mono tracking-wider text-center uppercase flex items-center justify-center gap-1.5">
@@ -165,11 +169,11 @@
         </div>
         <div class="space-y-2">
           <h2 class="text-2xl font-bold tracking-tight text-white uppercase">Challenge Complete!</h2>
-          <p class="text-slate-400 text-xs">데모의 모든 스테이지를 통과하였습니다.</p>
+          <p class="text-slate-400 text-xs">퍼즐의 모든 스테이지를 통과하였습니다.</p>
         </div>
         <button id="btn-restart-demo" class="w-full py-3 bg-slate-800 border border-slate-700 text-slate-200 rounded-xl hover:bg-slate-700 transition-all text-xs font-mono flex items-center justify-center gap-1.5">
           <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-          REPLAY DEMO
+          REPLAY PUZZLE
         </button>
       </div>
     </section>

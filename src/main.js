@@ -42,6 +42,7 @@ async function init() {
   
   // 첫 스테이지 로드
   currentStageData = loadStage(currentStageIndex, scene, physicsWorld, RAPIER, environmentObjects);
+  currentStageData._camera = camera;
   startPos = currentStageData.startPos;
   portal1Pos = currentStageData.portal1Pos;
   photoItemMesh = currentStageData.photoItemMesh;
@@ -132,7 +133,7 @@ async function init() {
       crosshair.style.display = 'block';
       if (!transitioning && hasStarted) fpsController.enabled = true;
     } else {
-      if (hasStarted && !transitioning && currentStageIndex !== 3) {
+      if (hasStarted && !transitioning) {
         pauseScreen.classList.remove('hidden');
       }
       crosshair.style.display = 'none';
@@ -166,13 +167,16 @@ async function init() {
       if (e.code === 'Digit2') jumpToStage(2);
       if (e.code === 'Digit3') jumpToStage(3);
       if (e.code === 'Digit4') jumpToStage(4);
-      if (e.code === 'Digit5') jumpToStage(5);
     }
   });
 
   document.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && fpsController.enabled && photoSystem.holding) {
-      photoSystem.stamp();
+    if (e.button === 0 && fpsController.enabled) {
+      if (photoSystem.holding) {
+        photoSystem.stamp();
+      } else if (currentStageData && currentStageData.onClick) {
+        currentStageData.onClick();
+      }
     }
   });
 
@@ -191,10 +195,15 @@ async function init() {
     
     currentStageIndex = index;
     if (sysStatus) {
-      sysStatus.textContent = `SYSTEM STATE: LOADED STAGE ${index}`;
+      sysStatus.textContent = `Current Stage : Stage ${index}`;
     }
 
-    // 1. 기존 메쉬 및 물리 자원 제거
+    // 1. 스테이지 자체 정리 (물리 바디 등 자체 자원을 먼저 해제)
+    if (currentStageData && currentStageData.cleanup) {
+      currentStageData.cleanup();
+    }
+
+    // 2. 나머지 메쉬 및 물리 자원 일괄 제거
     environmentObjects.forEach(obj => {
       scene.remove(obj);
       if (obj.geometry) obj.geometry.dispose();
@@ -207,11 +216,6 @@ async function init() {
       }
     });
     environmentObjects.length = 0;
-
-    // 1.5 기존 스테이지 정리 콜백 호출
-    if (currentStageData && currentStageData.cleanup) {
-      currentStageData.cleanup();
-    }
 
     // 2. 포토 시스템 초기화
     photoSystem.reset();
@@ -227,6 +231,7 @@ async function init() {
       console.warn("Invalid Stage Index");
       return;
     }
+    currentStageData._camera = camera;
     
     startPos = currentStageData.startPos;
     portal1Pos = currentStageData.portal1Pos;
@@ -236,7 +241,8 @@ async function init() {
     
     if (index === 1) fpsController.fallLimitY = -10;
     else if (index === 2) fpsController.fallLimitY = -115;
-    else fpsController.fallLimitY = startPos.y - 30; // 더미 스테이지 추락 방지
+    else if (index === 3) fpsController.fallLimitY = -430;
+    else fpsController.fallLimitY = startPos.y - 30;
     
     fpsController.teleport(startPos.x, startPos.y, startPos.z);
 
@@ -246,8 +252,8 @@ async function init() {
       photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
       photoSystem.setProjectedAsset('ramp');
     } else if (index === 3) {
-      photoSystem.setValidZone(new THREE.Vector3(15, -108, -10), new THREE.Vector3(50, -85, 10));
-      photoSystem.setProjectedAsset('ramp');
+      photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
+      photoSystem.setProjectedAsset('cube');
     } else {
       photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
       photoSystem.setProjectedAsset('cube');
@@ -259,12 +265,21 @@ async function init() {
       physicsWorld.removeRigidBody(testItem.userData.rigidBody);
     }
     
-    // 스테이지 1에서는 치즈를 터널 내부(Z=30)에 배치
-    const itemStartPos = (currentStageIndex === 1) 
-      ? [startPos.x + 2, startPos.y + 2, 30] 
+    // 스테이지별 테스트 아이템 위치 및 타입 설정
+    const itemStartPos = (currentStageIndex === 1)
+      ? [startPos.x + 2, startPos.y + 2, 30]
+      : (currentStageIndex === 3)
+      ? [startPos.x + 3, startPos.y + 2, startPos.z + 10]
       : [startPos.x + 5, startPos.y + 2, startPos.z];
-    
-    if (currentStageIndex === 1) {
+
+    if (currentStageIndex === 3) {
+      testItem = createCube(scene, physicsWorld, RAPIER, {
+        size: [3, 3, 3],
+        position: itemStartPos,
+        color: 0xffdd88,
+        hasGravity: true
+      });
+    } else if (currentStageIndex === 1) {
       testItem = createCube(scene, physicsWorld, RAPIER, {
         size: [2, 2, 2],
         position: itemStartPos,
@@ -281,8 +296,9 @@ async function init() {
       });
     }
 
-    pickableObjects[0] = testItem;
-    fp.pickableObjects[0] = testItem;
+    pickableObjects.length = 0;
+    pickableObjects.push(testItem);
+    fp.pickableObjects = pickableObjects;
     fp.environmentObjects = environmentObjects;
 
     fpsController.enabled = true;
@@ -316,7 +332,7 @@ async function init() {
     }
 
     // 스테이지 전용 루프 콜백
-    if (currentStageData && currentStageData.update) {
+    if (hasStarted && currentStageData && currentStageData.update) {
       currentStageData.update(delta, camera.position, pickableObjects);
     }
 
@@ -344,7 +360,6 @@ async function init() {
       // 포탈(모니터)에 2.5 이내로 접근했을 때
       if (dist < 2.5) {
         if (currentStageIndex === 3) {
-          // Stage 3는 데모의 마지막
           clearScreen.classList.remove('hidden');
           if (document.pointerLockElement === renderer.domElement) {
             document.exitPointerLock();

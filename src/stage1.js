@@ -22,7 +22,7 @@ export function loadStage1(scene, physicsWorld, RAPIER, environmentObjects) {
     tutorialWasd.textContent = 'WASD 키를 눌러 이동하세요';
     Object.assign(tutorialWasd.style, {
       position: 'fixed', top: '20%', left: '50%', transform: 'translate(-50%, -50%)',
-      color: '#fff', fontFamily: 'monospace', fontSize: '32px', textShadow: '2px 2px 4px #000',
+      color: '#fff', fontFamily: "'Noto Sans KR', sans-serif", fontSize: '32px', textShadow: '2px 2px 4px #000',
       zIndex: '100', pointerEvents: 'none', display: 'none'
     });
     document.body.appendChild(tutorialWasd);
@@ -34,7 +34,7 @@ export function loadStage1(scene, physicsWorld, RAPIER, environmentObjects) {
     tutorialGrab.textContent = '마우스를 클릭하여 물체를 집으세요';
     Object.assign(tutorialGrab.style, {
       position: 'fixed', top: '20%', left: '50%', transform: 'translate(-50%, -50%)',
-      color: '#00ffcc', fontFamily: 'monospace', fontSize: '32px', textShadow: '2px 2px 4px #000',
+      color: '#00ffcc', fontFamily: "'Noto Sans KR', sans-serif", fontSize: '32px', textShadow: '2px 2px 4px #000',
       zIndex: '100', pointerEvents: 'none', display: 'none'
     });
     document.body.appendChild(tutorialGrab);
@@ -165,7 +165,7 @@ function buildStage1Map(scene, physicsWorld, RAPIER, environmentObjects) {
   // 슬라이딩 도어 벽 생성 (Z=65 샌드위치 틈)
   const doorSize = [10, 8, 1];
   const doorGeo = new THREE.BoxGeometry(doorSize[0], doorSize[1], doorSize[2]);
-  const doorMat = new THREE.MeshStandardMaterial({ color: 0x00ccff, transparent: true, opacity: 0.7 });
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x00ccff, transparent: true, opacity: 0.7, depthWrite: false });
   const doorMesh = new THREE.Mesh(doorGeo, doorMat);
   doorMesh.position.set(0, 4, 65); 
   scene.add(doorMesh);
