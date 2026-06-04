@@ -132,7 +132,7 @@ async function init() {
       crosshair.style.display = 'block';
       if (!transitioning && hasStarted) fpsController.enabled = true;
     } else {
-      if (hasStarted && !transitioning && currentStageIndex !== 3) {
+      if (hasStarted && !transitioning && currentStageIndex !== 4) {
         pauseScreen.classList.remove('hidden');
       }
       crosshair.style.display = 'none';
@@ -236,7 +236,8 @@ async function init() {
     
     if (index === 1) fpsController.fallLimitY = -10;
     else if (index === 2) fpsController.fallLimitY = -115;
-    else if (index === 3) fpsController.fallLimitY = -210;
+    else if (index === 3) fpsController.fallLimitY = -210; // (will be handled by merged stage3)
+    else if (index === 4) fpsController.fallLimitY = -310;
     else fpsController.fallLimitY = startPos.y - 30;
     
     fpsController.teleport(startPos.x, startPos.y, startPos.z);
@@ -246,8 +247,8 @@ async function init() {
     if (index === 2) {
       photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
       photoSystem.setProjectedAsset('ramp');
-    } else if (index === 3) {
-      // 스테이지 3: GimmickDoor 기믹, 경사로 필요
+    } else if (index === 3 || index === 4) {
+      // 스테이지 3, 4: GimmickDoor 기믹, 경사로 필요
       photoSystem.setValidZone(new THREE.Vector3(-1000, -1000, -1000), new THREE.Vector3(1000, 1000, 1000));
       photoSystem.setProjectedAsset('ramp');
     } else {
@@ -358,8 +359,8 @@ async function init() {
       
       // 포탈(모니터)에 2.5 이내로 접근했을 때
       if (dist < 2.5) {
-        if (currentStageIndex === 3) {
-          // Stage 3는 데모의 마지막
+        if (currentStageIndex === 4) {
+          // Stage 4는 데모의 마지막
           clearScreen.classList.remove('hidden');
           if (document.pointerLockElement === renderer.domElement) {
             document.exitPointerLock();

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { loadStage1 } from './stage1.js';
 import { loadStage2 } from './stage2.js';
 import { loadStage3 } from './stage3.js';
+import { loadStage4 } from './stage4.js';
 
 export function createScene() {
   const scene = new THREE.Scene();
@@ -38,7 +39,9 @@ export function loadStage(stageIndex, scene, physicsWorld, RAPIER, environmentOb
     return loadStage2(scene, physicsWorld, RAPIER, environmentObjects);
   } else if (stageIndex === 3) {
     return loadStage3(scene, physicsWorld, RAPIER, environmentObjects);
-  } else if (stageIndex >= 4 && stageIndex <= 5) {
+  } else if (stageIndex === 4) {
+    return loadStage4(scene, physicsWorld, RAPIER, environmentObjects);
+  } else if (stageIndex >= 5 && stageIndex <= 6) {
     // Dummy stages for Developer Mode testing
     const offsetY = -100 * stageIndex;
     

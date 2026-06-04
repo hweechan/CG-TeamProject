@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { GimmickInfiniteCorridor } from './gimmickInfiniteCorridor.js';
 import { createPictogram } from './object.js';
 
-export function loadStage3(scene, physicsWorld, RAPIER, environmentObjects) {
-  const offsetY = -200;
+export function loadStage4(scene, physicsWorld, RAPIER, environmentObjects) {
+  const offsetY = -300;
   const startPos = new THREE.Vector3(0, 2 + offsetY, -10);
   const portal1Pos = new THREE.Vector3(0, -9999, 0); 
 
@@ -184,13 +184,13 @@ export function loadStage3(scene, physicsWorld, RAPIER, environmentObjects) {
     // 비상구 표지판이 스냅되어 있으면 문 오픈, 아니면 무한 루프 가동
     if (hasExitSignSnapped) {
       if (!gimmickDone) {
-        console.log('[Stage3] 비상구 스냅 완료! 무한 루프 탈출 가능');
+        console.log('[Stage4] 비상구 스냅 완료! 무한 루프 탈출 가능');
         gimmickDone = true;
         corridor.loopZ = 99999;
       }
     } else {
       if (gimmickDone) {
-        console.log('[Stage3] 비상구가 제거됨. 다시 무한 루프로 복귀');
+        console.log('[Stage4] 비상구가 제거됨. 다시 무한 루프로 복귀');
         gimmickDone = false;
         corridor.loopZ = 40;
       }
