@@ -133,7 +133,7 @@ async function init() {
       crosshair.style.display = 'block';
       if (!transitioning && hasStarted) fpsController.enabled = true;
     } else {
-      if (hasStarted && !transitioning && currentStageIndex !== 4) {
+      if (hasStarted && !transitioning) {
         pauseScreen.classList.remove('hidden');
       }
       crosshair.style.display = 'none';
